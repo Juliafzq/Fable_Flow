@@ -82,6 +82,34 @@ html, body {
   }
 }
 
+/* Portrait Lock on Mobile Phones: Keep app strictly upright when phone is rotated sideways */
+html.mobile-landscape-locked,
+html.mobile-landscape-locked body {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  background-color: var(--canvas-bg) !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+html.mobile-landscape-locked .app-viewport {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 100dvh !important;
+  max-width: 100dvh !important;
+  height: 100dvw !important;
+  max-height: 100dvw !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: translate(-50%, -50%) rotate(var(--portrait-lock-deg, -90deg)) !important;
+  transform-origin: center center !important;
+}
+
 .hidden {
   display: none !important;
   visibility: hidden !important;
@@ -1357,23 +1385,32 @@ html, body {
   padding: 6px 26px 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   overflow: hidden;
-  touch-action: pan-x;
-  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.stack-date-strip:active {
+  cursor: grabbing;
 }
 
 .stack-date-pills-track {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 2px;
   overflow-x: auto;
   scrollbar-width: none;
-  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  touch-action: none;
+  user-select: none;
 }
 
 .stack-date-pills-track::-webkit-scrollbar {

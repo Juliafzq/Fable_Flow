@@ -20,11 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v36';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v36';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v36';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v36';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v36';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v38';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v38';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v38';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v38';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v38';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -56,8 +56,11 @@ export class FableFlowApp {
     this._todayFlipDeg = this.state.isCardFlipped ? -180 : 0;
     this._stackFlipDeg = this.state.isStackCardFlipped ? -180 : 0;
     this._lastStackWheelTime = 0;
+    this._portraitLockAngle = 0;
+    this._isDraggingDateStrip = false;
 
     this.initDOM();
+    this.initMobilePortraitLock();
     this.init3DRenderers();
     this.bindGlobalEvents();
     this.startWallClockTicker();
@@ -67,6 +70,66 @@ export class FableFlowApp {
       this.syncFromAuthenticatedAccount(false);
     }
     this.registerServiceWorker();
+  }
+
+  initMobilePortraitLock() {
+    const tryNativeLock = () => {
+      try {
+        if (
+          screen.orientation &&
+          typeof screen.orientation.lock === 'function'
+        ) {
+          screen.orientation.lock('portrait-primary').catch(() => {});
+        }
+      } catch (_) {}
+    };
+
+    const updatePortraitLockState = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const isMobileLandscape = w > h && h <= 560;
+      const root = document.documentElement;
+      if (isMobileLandscape) {
+        let rawAngle = 90;
+        if (typeof window.orientation === 'number' && Math.abs(window.orientation) === 90) {
+          rawAngle = window.orientation;
+        } else if (
+          screen.orientation &&
+          typeof screen.orientation.angle === 'number'
+        ) {
+          rawAngle = screen.orientation.angle;
+        }
+        const counterDeg = rawAngle === -90 || rawAngle === 270 ? 90 : -90;
+        this._portraitLockAngle = counterDeg;
+        root.style.setProperty('--portrait-lock-deg', `${counterDeg}deg`);
+        root.classList.add('mobile-landscape-locked');
+      } else {
+        this._portraitLockAngle = 0;
+        root.classList.remove('mobile-landscape-locked');
+        root.style.removeProperty('--portrait-lock-deg');
+      }
+    };
+
+    tryNativeLock();
+    updatePortraitLockState();
+    window.addEventListener('resize', updatePortraitLockState);
+    window.addEventListener('orientationchange', () => {
+      updatePortraitLockState();
+      setTimeout(updatePortraitLockState, 120);
+    });
+    window.addEventListener('pointerdown', tryNativeLock, { once: true, passive: true });
+  }
+
+  getPointerXY(e) {
+    const cx = e && typeof e.clientX === 'number' ? e.clientX : 0;
+    const cy = e && typeof e.clientY === 'number' ? e.clientY : 0;
+    if (this._portraitLockAngle === -90) {
+      return { x: window.innerHeight - cy, y: cx };
+    }
+    if (this._portraitLockAngle === 90) {
+      return { x: cy, y: window.innerWidth - cx };
+    }
+    return { x: cx, y: cy };
   }
 
   getCurrentLogicalDateString(resetHour = 5) {
@@ -1490,7 +1553,6 @@ export class FableFlowApp {
    */
   bindCardSurfaceFlipGesture() {
     this.bindTwoWayCardFlipOnWrapper(this.els.card3DWrapper, false);
-    this.bindTwoWayCardFlipOnWrapper(this.els.stackCard3D, true);
   }
 
   bindTwoWayCardFlipOnWrapper(wrapper, isStackCard = false) {
@@ -1516,8 +1578,9 @@ export class FableFlowApp {
       ) {
         return;
       }
-      startX = e.clientX;
-      startY = e.clientY;
+      const pt = this.getPointerXY(e);
+      startX = pt.x;
+      startY = pt.y;
       activePointerId = e.pointerId;
       isDraggingFlip = false;
     });
@@ -1526,8 +1589,9 @@ export class FableFlowApp {
       if (startX === null || startY === null) return;
       if (activePointerId !== null && e.pointerId !== activePointerId) return;
 
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
+      const pt = this.getPointerXY(e);
+      const dx = pt.x - startX;
+      const dy = pt.y - startY;
 
       if (!isDraggingFlip && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.15) {
         isDraggingFlip = true;
@@ -1555,8 +1619,9 @@ export class FableFlowApp {
         return;
       }
 
-      const dx = (e.clientX !== undefined ? e.clientX : startX) - startX;
-      const dy = (e.clientY !== undefined ? e.clientY : startY) - startY;
+      const pt = e.clientX !== undefined ? this.getPointerXY(e) : { x: startX, y: startY };
+      const dx = pt.x - startX;
+      const dy = pt.y - startY;
       startX = null;
       startY = null;
       activePointerId = null;
@@ -1808,11 +1873,24 @@ export class FableFlowApp {
       centerPerspective.classList.remove('anim-slide-next', 'anim-slide-prev');
     }, 370);
 
-    if (this.els.stackDateStrip) {
-      const activePill = this.els.stackDateStrip.querySelector('.stack-date-pill.active');
-      if (activePill && typeof activePill.scrollIntoView === 'function') {
-        activePill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      }
+    if (!this._isDraggingDateStrip) {
+      this.centerActiveDatePill(true);
+    }
+  }
+
+  centerActiveDatePill(smooth = true) {
+    if (!this.els.stackDateStrip) return;
+    const pillsTrack = this.els.stackDateStrip.querySelector('.stack-date-pills-track');
+    const activePill = pillsTrack && pillsTrack.querySelector('.stack-date-pill.active');
+    if (!pillsTrack || !activePill) return;
+    const targetLeft = Math.max(
+      0,
+      activePill.offsetLeft - pillsTrack.clientWidth / 2 + activePill.offsetWidth / 2
+    );
+    if (typeof pillsTrack.scrollTo === 'function') {
+      pillsTrack.scrollTo({ left: targetLeft, behavior: smooth ? 'smooth' : 'auto' });
+    } else {
+      pillsTrack.scrollLeft = targetLeft;
     }
   }
 
@@ -1980,8 +2058,9 @@ export class FableFlowApp {
     }, 370);
   }
 
-  selectStackDate(dateKey, explicitDirection = null, initialOffsetPx = 0) {
+  selectStackDate(dateKey, explicitDirection = null, initialOffsetPx = 0, options = {}) {
     if (dateKey === this.state.cardDateKey) {
+      if (options && options.stayOnStack) return;
       this.sensory.playStackRiffleTick();
       this.state.activePillar = 'card';
       this.state.isCardFlipped = false;
@@ -2022,21 +2101,33 @@ export class FableFlowApp {
     }
   }
 
-  getNavigableStackDateKeys() {
+  getStackStripDateKeys() {
+    const todayKey =
+      this.state.cardDateKey || this.getCurrentLogicalDateString(this.state.dailyResetHour);
     const keySet = new Set(this.getSortedArchiveKeys());
-    if (
-      this.state.selectedStackDateKey &&
-      this.state.selectedStackDateKey !== this.state.cardDateKey
-    ) {
+    // Include continuous 45-day history + current month + previous month so strip & stack scroll smoothly
+    for (let i = -45; i <= 0; i++) {
+      keySet.add(this.getOffsetDateKey(todayKey, i));
+    }
+    if (this.state.selectedStackDateKey && this.state.selectedStackDateKey <= todayKey) {
       keySet.add(this.state.selectedStackDateKey);
     }
     return Array.from(keySet).sort();
   }
 
+  getNavigableStackDateKeys() {
+    const todayKey =
+      this.state.cardDateKey || this.getCurrentLogicalDateString(this.state.dailyResetHour);
+    return this.getStackStripDateKeys().filter((k) => k < todayKey);
+  }
+
   stepStackCard(direction, initialOffsetPx = 0) {
     const keys = this.getNavigableStackDateKeys();
     if (keys.length === 0) return;
-    const idx = keys.indexOf(this.state.selectedStackDateKey);
+    const currentKey =
+      this.state.selectedStackDateKey || keys[keys.length - 1];
+    let idx = keys.indexOf(currentKey);
+    if (idx < 0) idx = keys.length - 1;
     const nextIdx = Math.max(0, Math.min(keys.length - 1, idx + direction));
     if (nextIdx !== idx) {
       this.selectStackDate(keys[nextIdx], direction, initialOffsetPx);
@@ -2134,74 +2225,227 @@ export class FableFlowApp {
       });
     }
 
-    // 1. Scrub / Drag along the top #stack-date-strip to scroll through dates continuously
+    // 1. Natural-Direction Horizontal Scroll & Momentum on the Top Short Calendar Bar (#stack-date-strip)
     if (this.els.stackDateStrip) {
-      let isScrubbingStrip = false;
-      const pickDateFromPoint = (clientX, clientY) => {
-        const el = document.elementFromPoint(clientX, clientY);
-        const pill = el && el.closest ? el.closest('.stack-date-pill') : null;
-        if (pill && pill.dataset.dateKey) {
-          this.selectStackDate(pill.dataset.dateKey);
+      let stripStartX = null;
+      let stripStartScrollLeft = 0;
+      let stripStartNavIdx = 0;
+      let lastMoveX = 0;
+      let lastMoveTime = 0;
+      let velocityX = 0;
+      let inertiaRaf = null;
+      let tappedPill = null;
+
+      const getPillsTrack = () =>
+        this.els.stackDateStrip.querySelector('.stack-date-pills-track');
+
+      const stepDateFromDragDelta = (dx) => {
+        const navKeys = this.getNavigableStackDateKeys();
+        if (navKeys.length === 0) return;
+        // Natural direction: dragging right (dx > 0) pulls earlier dates from the left (-stepDelta)
+        // Dragging left (dx < 0) pulls later dates from the right (+stepDelta)
+        const stepDelta = Math.trunc(dx / 34);
+        const targetIdx = Math.max(
+          0,
+          Math.min(navKeys.length - 1, stripStartNavIdx - stepDelta)
+        );
+        const targetKey = navKeys[targetIdx];
+        if (targetKey && targetKey !== this.state.selectedStackDateKey) {
+          const dir = targetKey > (this.state.selectedStackDateKey || '') ? 1 : -1;
+          this.selectStackDate(targetKey, dir, 0, { stayOnStack: true });
         }
       };
+
       this.els.stackDateStrip.addEventListener('pointerdown', (e) => {
-        isScrubbingStrip = true;
-        pickDateFromPoint(e.clientX, e.clientY);
+        if (e.target.closest('.stack-month-label')) return;
+        const track = getPillsTrack();
+        if (!track) return;
+        if (inertiaRaf) {
+          cancelAnimationFrame(inertiaRaf);
+          inertiaRaf = null;
+        }
+        const pt = this.getPointerXY(e);
+        stripStartX = pt.x;
+        lastMoveX = pt.x;
+        lastMoveTime = performance.now();
+        velocityX = 0;
+        stripStartScrollLeft = track.scrollLeft;
+        const navKeys = this.getNavigableStackDateKeys();
+        const curIdx = navKeys.indexOf(this.state.selectedStackDateKey);
+        stripStartNavIdx = curIdx >= 0 ? curIdx : Math.max(0, navKeys.length - 1);
+        this._isDraggingDateStrip = false;
+        tappedPill = e.target.closest('.stack-date-pill');
       });
-      this.els.stackDateStrip.addEventListener('pointermove', (e) => {
-        if (!isScrubbingStrip) return;
-        pickDateFromPoint(e.clientX, e.clientY);
-      });
-      window.addEventListener('pointerup', () => {
-        isScrubbingStrip = false;
-      });
+
+      window.addEventListener(
+        'pointermove',
+        (e) => {
+          if (stripStartX === null) return;
+          const track = getPillsTrack();
+          if (!track) return;
+          const pt = this.getPointerXY(e);
+          const dx = pt.x - stripStartX;
+          const now = performance.now();
+          const dt = Math.max(1, now - lastMoveTime);
+
+          if (!this._isDraggingDateStrip && Math.abs(dx) > 6) {
+            this._isDraggingDateStrip = true;
+          }
+
+          if (this._isDraggingDateStrip) {
+            if (e.cancelable) e.preventDefault();
+            velocityX = 0.7 * ((pt.x - lastMoveX) / dt) + 0.3 * velocityX;
+            lastMoveX = pt.x;
+            lastMoveTime = now;
+            const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+            track.scrollLeft = Math.max(0, Math.min(maxScroll, stripStartScrollLeft - dx));
+            stepDateFromDragDelta(dx);
+          }
+        },
+        { passive: false }
+      );
+
+      const finishStripDrag = (e) => {
+        if (stripStartX === null) return;
+        const track = getPillsTrack();
+        const pt = e && e.clientX !== undefined ? this.getPointerXY(e) : { x: lastMoveX };
+        const totalDx = pt.x - stripStartX;
+        const wasDragging = this._isDraggingDateStrip;
+        stripStartX = null;
+
+        if (!wasDragging || Math.abs(totalDx) <= 6) {
+          this._isDraggingDateStrip = false;
+          if (tappedPill && tappedPill.dataset.dateKey) {
+            this.selectStackDate(tappedPill.dataset.dateKey);
+          }
+          tappedPill = null;
+          return;
+        }
+
+        tappedPill = null;
+        let accumDx = totalDx;
+        if (track && Math.abs(velocityX) > 0.22) {
+          let v = velocityX * 15;
+          const stepInertia = () => {
+            if (!track || Math.abs(v) < 0.7) {
+              this._isDraggingDateStrip = false;
+              this.centerActiveDatePill(true);
+              inertiaRaf = null;
+              return;
+            }
+            accumDx += v;
+            const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+            track.scrollLeft = Math.max(0, Math.min(maxScroll, stripStartScrollLeft - accumDx));
+            stepDateFromDragDelta(accumDx);
+            v *= 0.9;
+            inertiaRaf = requestAnimationFrame(stepInertia);
+          };
+          inertiaRaf = requestAnimationFrame(stepInertia);
+        } else {
+          this._isDraggingDateStrip = false;
+          this.centerActiveDatePill(true);
+        }
+      };
+
+      window.addEventListener('pointerup', finishStripDrag);
+      window.addEventListener('pointercancel', finishStripDrag);
     }
 
-    // 2. Interactive Horizontal Drag on peeking side cards or outer carousel stage to scroll through the Stack
-    //    (Swiping on #stack-card-3d itself is handled by bindTwoWayCardFlipOnWrapper so it flips effortlessly!)
+    // 2. Smooth 1:1 Horizontal Swipe / Drag anywhere on #stack-carousel-stage (including #stack-card-3d)
     if (this.els.stackCarouselStage) {
       let startX = null;
       let startY = null;
+      let lastX = 0;
+      let lastTime = 0;
+      let vx = 0;
       let isDraggingCarousel = false;
       const centerPerspective = this.els.stackCarouselStage.querySelector(
         '.stack-center-perspective'
       );
 
       this.els.stackCarouselStage.addEventListener('pointerdown', (e) => {
-        // If pointerdown is inside #stack-card-3d, let the card flip/pencil gesture handle it
-        if (e.target.closest('#stack-card-3d')) return;
-        startX = e.clientX;
-        startY = e.clientY;
+        if (
+          e.target.closest('.stack-card-edit-btn') ||
+          e.target.closest('.journal-photo-remove-btn') ||
+          e.target.closest('.journal-photo-add-second-pill') ||
+          e.target.closest('.stack-retro-empty-slot') ||
+          e.target.closest('.task-inline-input') ||
+          e.target.closest('.task-inline-delete-btn')
+        ) {
+          return;
+        }
+        // In Edit Mode, allow swiping on a task row to cross it out
+        if (this.state.isStackEditMode && e.target.closest('.task-row')) {
+          return;
+        }
+        const pt = this.getPointerXY(e);
+        startX = pt.x;
+        startY = pt.y;
+        lastX = pt.x;
+        lastTime = performance.now();
+        vx = 0;
         isDraggingCarousel = false;
       });
 
-      window.addEventListener('pointermove', (e) => {
-        if (startX === null || startY === null) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
+      window.addEventListener(
+        'pointermove',
+        (e) => {
+          if (startX === null || startY === null) return;
+          const pt = this.getPointerXY(e);
+          const dx = pt.x - startX;
+          const dy = pt.y - startY;
+          const now = performance.now();
+          const dt = Math.max(1, now - lastTime);
 
-        if (!isDraggingCarousel && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
-          isDraggingCarousel = true;
-        }
+          if (!isDraggingCarousel && Math.abs(dx) > 7 && Math.abs(dx) > Math.abs(dy) * 1.1) {
+            isDraggingCarousel = true;
+            if (document.activeElement && document.activeElement.blur) {
+              document.activeElement.blur();
+            }
+          }
 
-        if (isDraggingCarousel && centerPerspective) {
-          const offset = Math.max(-110, Math.min(110, dx * 0.55));
-          centerPerspective.style.transition = 'none';
-          centerPerspective.style.transform = `translateX(${offset.toFixed(1)}px)`;
-        }
-      });
+          if (isDraggingCarousel && centerPerspective) {
+            if (e.cancelable) e.preventDefault();
+            vx = 0.7 * ((pt.x - lastX) / dt) + 0.3 * vx;
+            lastX = pt.x;
+            lastTime = now;
+            const offset = Math.max(-165, Math.min(165, dx * 0.78));
+            const scale = (1 - Math.min(0.05, Math.abs(dx) / 2600)).toFixed(3);
+            centerPerspective.style.transition = 'none';
+            centerPerspective.style.transform = `translate3d(${offset.toFixed(1)}px, 0, 0) scale(${scale})`;
+            if (this.els.stackPeekLeft) {
+              this.els.stackPeekLeft.style.transition = 'none';
+              this.els.stackPeekLeft.style.transform = `translateY(-50%) translateX(${Math.max(0, offset * 0.32).toFixed(1)}px)`;
+            }
+            if (this.els.stackPeekRight) {
+              this.els.stackPeekRight.style.transition = 'none';
+              this.els.stackPeekRight.style.transform = `translateY(-50%) translateX(${Math.min(0, offset * 0.32).toFixed(1)}px)`;
+            }
+          }
+        },
+        { passive: false }
+      );
 
       const endCarouselDrag = (e) => {
         if (startX === null || startY === null) return;
-        const dx = (e.clientX !== undefined ? e.clientX : startX) - startX;
-        const dy = (e.clientY !== undefined ? e.clientY : startY) - startY;
-        const releaseOffset = Math.max(-110, Math.min(110, dx * 0.55));
+        const pt = e && e.clientX !== undefined ? this.getPointerXY(e) : { x: lastX, y: startY };
+        const dx = pt.x - startX;
+        const dy = pt.y - startY;
+        const releaseOffset = Math.max(-165, Math.min(165, dx * 0.78));
         startX = null;
         startY = null;
 
         if (centerPerspective) {
           centerPerspective.style.transition = '';
           centerPerspective.style.transform = '';
+        }
+        if (this.els.stackPeekLeft) {
+          this.els.stackPeekLeft.style.transition = '';
+          this.els.stackPeekLeft.style.transform = '';
+        }
+        if (this.els.stackPeekRight) {
+          this.els.stackPeekRight.style.transition = '';
+          this.els.stackPeekRight.style.transform = '';
         }
 
         if (!isDraggingCarousel) return;
@@ -2212,7 +2456,8 @@ export class FableFlowApp {
           this._justFinishedCardSwipe = false;
         }, 220);
 
-        if (Math.abs(dx) >= 24 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+        const flicked = Math.abs(vx) > 0.25 && Math.abs(dx) >= 10;
+        if ((Math.abs(dx) >= 18 || flicked) && Math.abs(dx) > Math.abs(dy) * 1.05) {
           if (dx > 0) {
             this.stepStackCard(-1, releaseOffset);
           } else {
@@ -2427,7 +2672,7 @@ export class FableFlowApp {
       isDragging = true;
       hasDragged = false;
       warnedStopwatchDrag = false;
-      dragStartX = e.clientX;
+      dragStartX = this.getPointerXY(e).x;
       dragStartAngle = slot.angleDegrees;
       lastNotchIndex = Math.round(dragStartAngle / OdometerDialPhysics.DEGREES_PER_NOTCH);
       stage.setPointerCapture(e.pointerId);
@@ -2438,7 +2683,7 @@ export class FableFlowApp {
       const slot = this.state.timers[this.state.selectedQuadrant];
       if (!slot) return;
 
-      const translationX = e.clientX - dragStartX;
+      const translationX = this.getPointerXY(e).x - dragStartX;
       if (!hasDragged && Math.abs(translationX) <= 3) return;
       hasDragged = true;
 
@@ -3399,86 +3644,65 @@ export class FableFlowApp {
     const curMeta = this.formatDateMetadataForKey(currentDateKey);
 
     if (this.els.stackDateStrip) {
-      this.els.stackDateStrip.innerHTML = '';
-      const activeMonth = curMeta.monthKey;
+      const stripKeys = this.getStackStripDateKeys();
+      const stripSignature = stripKeys.join(',');
+      let monthBtn = this.els.stackDateStrip.querySelector('.stack-month-label');
+      let pillsTrack = this.els.stackDateStrip.querySelector('.stack-date-pills-track');
 
-      const monthBtn = document.createElement('button');
-      monthBtn.type = 'button';
-      monthBtn.className = 'stack-month-label';
-      monthBtn.title = 'Tap to switch between SEP and OCT';
-      monthBtn.textContent = curMeta.shortMonth;
-      monthBtn.addEventListener('click', () => {
-        const targetMonth = activeMonth === '2026-09' ? todayMeta.monthKey : '2026-09';
-        const candidates = sortedKeys.filter((k) => k.startsWith(`${targetMonth}-`));
-        if (candidates.length > 0) {
-          this.selectStackDate(candidates[candidates.length - 1]);
-        } else if (targetMonth === todayMeta.monthKey && this.state.cardDateKey) {
-          this.selectStackDate(this.state.cardDateKey);
-        } else if (targetMonth === '2026-09') {
-          this.selectStackDate('2026-09-30');
-        }
-      });
-      this.els.stackDateStrip.appendChild(monthBtn);
+      if (!monthBtn || !pillsTrack || pillsTrack.dataset.keysSignature !== stripSignature) {
+        this.els.stackDateStrip.innerHTML = '';
+        monthBtn = document.createElement('button');
+        monthBtn.type = 'button';
+        monthBtn.className = 'stack-month-label';
+        monthBtn.title = 'Tap to jump between months';
+        monthBtn.addEventListener('click', () => {
+          const curM = this.formatDateMetadataForKey(
+            this.state.selectedStackDateKey || this.getOffsetDateKey(todayKey, -1)
+          ).monthKey;
+          const prevMonth = curM === todayMeta.monthKey ? '2026-09' : todayMeta.monthKey;
+          const monthDates = this.getNavigableStackDateKeys().filter((k) =>
+            k.startsWith(`${prevMonth}-`)
+          );
+          if (monthDates.length > 0) {
+            this.selectStackDate(monthDates[monthDates.length - 1]);
+          }
+        });
+        this.els.stackDateStrip.appendChild(monthBtn);
 
-      const pillsTrack = document.createElement('div');
-      pillsTrack.className = 'stack-date-pills-track';
+        pillsTrack = document.createElement('div');
+        pillsTrack.className = 'stack-date-pills-track';
+        pillsTrack.dataset.keysSignature = stripSignature;
 
-      if (activeMonth === todayMeta.monthKey) {
-        const maxDay = Math.max(todayMeta.dayNum, curMeta.dayNum);
-        for (let d = 1; d <= maxDay; d++) {
-          const dPadded = String(d).padStart(2, '0');
-          const dKey = `${activeMonth}-${dPadded}`;
-          const hasCard =
-            Boolean(this.state.archiveCards[dKey]) || dKey === this.state.cardDateKey;
-          const isSelected = currentDateKey === dKey;
-
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'stack-date-pill';
-          if (hasCard) btn.classList.add('has-card');
-          if (isSelected) btn.classList.add('active');
-          btn.textContent = dPadded;
-          btn.dataset.dateKey = dKey;
-          btn.addEventListener('click', () => {
-            this.selectStackDate(dKey);
-          });
-          pillsTrack.appendChild(btn);
-        }
-      } else {
-        const monthKeySet = new Set(sortedKeys.filter((k) => k.startsWith(`${activeMonth}-`)));
-        if (currentDateKey.startsWith(`${activeMonth}-`)) {
-          monthKeySet.add(currentDateKey);
-        }
-        const monthKeys = Array.from(monthKeySet).sort();
-        monthKeys.forEach((dKey) => {
-          const cardObj = this.state.archiveCards[dKey];
-          const metaObj = cardObj || this.formatDateMetadataForKey(dKey);
+        stripKeys.forEach((dKey) => {
+          const metaObj = this.formatDateMetadataForKey(dKey);
           const dPadded = String(metaObj.dayNum).padStart(2, '0');
-          const isSelected = currentDateKey === dKey;
-
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'stack-date-pill';
-          if (cardObj) btn.classList.add('has-card');
-          if (isSelected) btn.classList.add('active');
           btn.textContent = dPadded;
           btn.dataset.dateKey = dKey;
-          btn.addEventListener('click', () => {
-            this.selectStackDate(dKey);
-          });
           pillsTrack.appendChild(btn);
         });
+
+        this.els.stackDateStrip.appendChild(pillsTrack);
       }
 
-      this.els.stackDateStrip.appendChild(pillsTrack);
-
-      requestAnimationFrame(() => {
-        if (!pillsTrack) return;
-        const activePill = pillsTrack.querySelector('.stack-date-pill.active');
-        if (activePill && typeof activePill.scrollIntoView === 'function') {
-          activePill.scrollIntoView({ behavior: 'instant', inline: 'center', block: 'nearest' });
-        }
+      monthBtn.textContent = curMeta.shortMonth;
+      const pills = pillsTrack.querySelectorAll('.stack-date-pill');
+      pills.forEach((btn) => {
+        const dKey = btn.dataset.dateKey;
+        const hasCard =
+          Boolean(this.state.archiveCards[dKey]) || dKey === this.state.cardDateKey;
+        const isSelected = currentDateKey === dKey;
+        btn.classList.toggle('has-card', hasCard);
+        btn.classList.toggle('active', isSelected);
       });
+
+      if (!this._isDraggingDateStrip) {
+        requestAnimationFrame(() => {
+          this.centerActiveDatePill(false);
+        });
+      }
     }
 
     const curNavIdx = navKeys.indexOf(currentDateKey);
@@ -3939,6 +4163,9 @@ export class FableFlowApp {
     let startedAtLeftEdgeBezel = false;
 
     rowEl.addEventListener('pointerdown', (e) => {
+      if (isStackCard && !this.state.isStackEditMode) {
+        return;
+      }
       if (
         e.target.closest('.task-tomato-btn') ||
         e.target.closest('.task-inline-input') ||
@@ -3947,8 +4174,9 @@ export class FableFlowApp {
         return;
       }
       e.stopPropagation(); // QA #1: Prevent bubbling to #daily-card-3d / #stack-card-3d so flip doesn't double-toggle
-      startX = e.clientX;
-      startY = e.clientY;
+      const pt = this.getPointerXY(e);
+      startX = pt.x;
+      startY = pt.y;
       const rowRect = rowEl.getBoundingClientRect();
       const relX = e.clientX - rowRect.left;
 
@@ -3971,8 +4199,9 @@ export class FableFlowApp {
 
     rowEl.addEventListener('pointermove', (e) => {
       if (!isTracking || startX === null) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
+      const pt = this.getPointerXY(e);
+      const dx = pt.x - startX;
+      const dy = pt.y - startY;
 
       const activeWrapper = isStackCard ? this.els.stackCard3D : this.els.card3DWrapper;
       const baseDeg = isStackCard ? this._stackFlipDeg : this._todayFlipDeg;
@@ -4015,8 +4244,9 @@ export class FableFlowApp {
         activeWrapper.style.transform = '';
       }
 
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
+      const pt = this.getPointerXY(e);
+      const dx = pt.x - startX;
+      const dy = pt.y - startY;
       startX = null;
       startY = null;
 
