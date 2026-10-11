@@ -94,8 +94,22 @@ export class OdometerDialPhysics {
    * Truncates a task title to the first few words so text never overflows on a tomato body.
    */
   static formatShortTomatoTitle(rawTitle, maxWords = 2, maxChars = 13) {
-    const cleaned = String(rawTitle || '').trim().replace(/\s+/g, ' ');
+    const cleaned = String(rawTitle || '')
+      .replace(/\u2006/g, '')
+      .trim()
+      .replace(/\s+/g, ' ');
     if (!cleaned) return '';
+    const hasCJK =
+      /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f\uac00-\ud7af]/.test(
+        cleaned
+      );
+    if (hasCJK) {
+      const cjkLimit = maxChars <= 13 ? 7 : 12;
+      if (cleaned.length > cjkLimit) {
+        return cleaned.slice(0, cjkLimit - 1).trimEnd() + '…';
+      }
+      return cleaned;
+    }
     const words = cleaned.split(' ');
     let candidate = words.slice(0, maxWords).join(' ');
     const hadMoreWords = words.length > maxWords;
@@ -154,7 +168,12 @@ export class OdometerDialPhysics {
    */
   static parseTypedTimeInput(rawInput) {
     if (rawInput === null || rawInput === undefined) return null;
-    const cleaned = String(rawInput).trim().toLowerCase();
+    const cleaned = String(rawInput)
+      .replace(/\u2006/g, '')
+      .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+      .replace(/：/g, ':')
+      .trim()
+      .toLowerCase();
     if (!cleaned) return null;
 
     // 1. Check for "Xh Ym" or "Xh" or "Ym" unit format

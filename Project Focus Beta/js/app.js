@@ -20,11 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v40';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v40';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v40';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v40';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v40';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v41';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v41';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v41';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v41';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v41';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -775,7 +775,9 @@ export class FableFlowApp {
 
     // 2b. Matte Black Back of Card — Evening Reflection Journal & Photo Upload
     if (this.els.cardBackReflection) {
-      this.els.cardBackReflection.addEventListener('input', () => {
+      let reflectionComposing = false;
+      const syncTodayReflection = (isFromCompositionEnd = false) => {
+        if (reflectionComposing && !isFromCompositionEnd) return;
         const clamped = this.clampReflectionInputText(this.els.cardBackReflection.value);
         if (this.els.cardBackReflection.value !== clamped) {
           this.els.cardBackReflection.value = clamped;
@@ -784,6 +786,20 @@ export class FableFlowApp {
         this.state.reflectionText = this.els.cardBackReflection.value;
         this.adjustReflectionTypography(this.els.cardBackReflection);
         this.saveState();
+      };
+      this.els.cardBackReflection.addEventListener('compositionstart', () => {
+        reflectionComposing = true;
+      });
+      this.els.cardBackReflection.addEventListener('compositionend', () => {
+        reflectionComposing = false;
+        syncTodayReflection(true);
+      });
+      this.els.cardBackReflection.addEventListener('input', (e) => {
+        if (reflectionComposing || e.isComposing) {
+          this.state.reflectionText = this.els.cardBackReflection.value;
+          return;
+        }
+        syncTodayReflection(false);
       });
     }
 
@@ -1377,13 +1393,19 @@ export class FableFlowApp {
 
   /**
    * Limits task input to at most MAX_TASK_WORDS (18 words) and MAX_TASK_CHARS (110 chars)
-   * so users can enter full task descriptions while keeping card margins clean.
+   * so users can enter full task descriptions in any keyboard language (including Chinese
+   * Pinyin / Handwriting, Japanese, Korean, Arabic, and European languages) without
+   * mutating internal IME whitespace (\u2006) or adding extra spaces.
    */
   clampTaskInputText(rawText) {
-    let text = String(rawText || '').replace(/\s+/g, ' ');
+    // Strip stray iOS Pinyin Six-Per-Em spaces (\u2006) and convert line breaks to a single space
+    // without collapsing spaces mid-typing.
+    let text = String(rawText || '')
+      .replace(/\u2006/g, '')
+      .replace(/\r?\n/g, ' ');
     const leadingTrimmed = text.trimStart();
     if (leadingTrimmed) {
-      const words = leadingTrimmed.split(' ');
+      const words = leadingTrimmed.split(/[ \t]+/).filter(Boolean);
       if (words.length > MAX_TASK_WORDS) {
         text = words.slice(0, MAX_TASK_WORDS).join(' ');
       }
@@ -1467,10 +1489,11 @@ export class FableFlowApp {
 
   /**
    * Limits Evening Reflection text to MAX_REFLECTION_WORDS and MAX_REFLECTION_CHARS
-   * so the reflection stops once the minimum font size floor is reached.
+   * so the reflection stops once the minimum font size floor is reached, while
+   * preserving multi-line formatting and multi-language / IME input.
    */
   clampReflectionInputText(rawText) {
-    let text = String(rawText || '');
+    let text = String(rawText || '').replace(/\u2006/g, '');
     const words = text.trim().split(/\s+/).filter(Boolean);
     if (words.length > MAX_REFLECTION_WORDS) {
       text = words.slice(0, MAX_REFLECTION_WORDS).join(' ');
@@ -1595,7 +1618,11 @@ export class FableFlowApp {
         e.target.closest('.journal-photo-add-second-pill') ||
         e.target.closest('.stack-card-edit-btn') ||
         e.target.closest('.task-inline-input') ||
-        e.target.closest('.task-inline-delete-btn')
+        e.target.closest('.task-inline-edit-wrap') ||
+        e.target.closest('.task-inline-delete-btn') ||
+        e.target.closest('.card-back-reflection-editor') ||
+        e.target.closest('textarea, input') ||
+        wrapper.querySelector('.task-inline-input')
       ) {
         return;
       }
@@ -1616,8 +1643,14 @@ export class FableFlowApp {
 
       if (!isDraggingFlip && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.15) {
         isDraggingFlip = true;
-        if (document.activeElement && document.activeElement.blur) {
-          document.activeElement.blur();
+        const activeEl = document.activeElement;
+        if (
+          activeEl &&
+          activeEl.blur &&
+          activeEl.tagName !== 'TEXTAREA' &&
+          activeEl.tagName !== 'INPUT'
+        ) {
+          activeEl.blur();
         }
       }
 
@@ -2233,7 +2266,9 @@ export class FableFlowApp {
     }
 
     if (this.els.stackCardBackReflection) {
-      this.els.stackCardBackReflection.addEventListener('input', () => {
+      let stackReflectionComposing = false;
+      const syncStackReflection = (isFromCompositionEnd = false) => {
+        if (stackReflectionComposing && !isFromCompositionEnd) return;
         const card = this.getSelectedStackCard();
         if (!card) return;
         const clamped = this.clampReflectionInputText(this.els.stackCardBackReflection.value);
@@ -2243,6 +2278,21 @@ export class FableFlowApp {
         card.reflectionText = this.els.stackCardBackReflection.value;
         this.adjustReflectionTypography(this.els.stackCardBackReflection);
         this.saveState();
+      };
+      this.els.stackCardBackReflection.addEventListener('compositionstart', () => {
+        stackReflectionComposing = true;
+      });
+      this.els.stackCardBackReflection.addEventListener('compositionend', () => {
+        stackReflectionComposing = false;
+        syncStackReflection(true);
+      });
+      this.els.stackCardBackReflection.addEventListener('input', (e) => {
+        const card = this.getSelectedStackCard();
+        if (stackReflectionComposing || e.isComposing) {
+          if (card) card.reflectionText = this.els.stackCardBackReflection.value;
+          return;
+        }
+        syncStackReflection(false);
       });
     }
 
@@ -2391,7 +2441,11 @@ export class FableFlowApp {
           e.target.closest('.journal-photo-add-second-pill') ||
           e.target.closest('.stack-retro-empty-slot') ||
           e.target.closest('.task-inline-input') ||
-          e.target.closest('.task-inline-delete-btn')
+          e.target.closest('.task-inline-edit-wrap') ||
+          e.target.closest('.task-inline-delete-btn') ||
+          e.target.closest('.card-back-reflection-editor') ||
+          e.target.closest('textarea, input') ||
+          this.els.stackCarouselStage.querySelector('.task-inline-input')
         ) {
           return;
         }
@@ -2420,8 +2474,14 @@ export class FableFlowApp {
 
           if (!isDraggingCarousel && Math.abs(dx) > 7 && Math.abs(dx) > Math.abs(dy) * 1.1) {
             isDraggingCarousel = true;
-            if (document.activeElement && document.activeElement.blur) {
-              document.activeElement.blur();
+            const activeEl = document.activeElement;
+            if (
+              activeEl &&
+              activeEl.blur &&
+              activeEl.tagName !== 'TEXTAREA' &&
+              activeEl.tagName !== 'INPUT'
+            ) {
+              activeEl.blur();
             }
           }
 
@@ -2802,10 +2862,22 @@ export class FableFlowApp {
       e.stopPropagation();
     });
 
-    this.els.heroTimeInput.addEventListener('input', () => {
+    let heroTimeComposing = false;
+    let heroTimeCompEnd = 0;
+    this.els.heroTimeInput.addEventListener('compositionstart', () => {
+      heroTimeComposing = true;
+    });
+    this.els.heroTimeInput.addEventListener('compositionend', () => {
+      heroTimeComposing = false;
+      heroTimeCompEnd = Date.now();
+    });
+
+    this.els.heroTimeInput.addEventListener('input', (e) => {
+      if (heroTimeComposing || e.isComposing) return;
       const rawVal = this.els.heroTimeInput.value;
       if (this.els.heroTimeUnitBadge) {
-        this.els.heroTimeUnitBadge.textContent = rawVal.includes(':') ? 'HH:MM' : 'MIN';
+        this.els.heroTimeUnitBadge.textContent =
+          rawVal.includes(':') || rawVal.includes('：') ? 'HH:MM' : 'MIN';
       }
       const parsedMins = OdometerDialPhysics.parseTypedTimeInput(rawVal);
       if (parsedMins !== null && this.hero3D) {
@@ -2821,10 +2893,17 @@ export class FableFlowApp {
     });
 
     this.els.heroTimeInput.addEventListener('keydown', (e) => {
+      const imeActive =
+        heroTimeComposing ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        Date.now() - heroTimeCompEnd < 120;
       if (e.key === 'Enter') {
+        if (imeActive) return;
         e.preventDefault();
         this.commitHeroTimeEditor();
       } else if (e.key === 'Escape') {
+        if (imeActive) return;
         e.preventDefault();
         this.cancelHeroTimeEditor();
       }
@@ -4188,9 +4267,12 @@ export class FableFlowApp {
         return;
       }
       if (
+        rowEl.querySelector('.task-inline-input') ||
         e.target.closest('.task-tomato-btn') ||
         e.target.closest('.task-inline-input') ||
-        e.target.closest('.task-inline-delete-btn')
+        e.target.closest('.task-inline-edit-wrap') ||
+        e.target.closest('.task-inline-delete-btn') ||
+        e.target.closest('textarea, input')
       ) {
         return;
       }
@@ -4661,13 +4743,16 @@ export class FableFlowApp {
     const input = document.createElement('textarea');
     input.rows = 1;
     input.className = 'task-inline-input';
-    input.maxLength = MAX_TASK_CHARS;
     input.placeholder = 'Type item...';
     input.setAttribute('aria-label', 'Type task directly on card');
 
-    const syncHeight = () => {
-      input.style.height = 'auto';
-      input.style.height = `${input.scrollHeight}px`;
+    const syncHeight = (collapseFirst = true) => {
+      if (collapseFirst) {
+        input.style.height = 'auto';
+      }
+      if (collapseFirst || input.scrollHeight > input.clientHeight + 2) {
+        input.style.height = `${input.scrollHeight}px`;
+      }
     };
 
     titleWrap.appendChild(input);
@@ -4680,16 +4765,24 @@ export class FableFlowApp {
     }
 
     this.fitUnifiedCardTaskTypography(container, addItemEl);
-    syncHeight();
+    syncHeight(true);
     setTimeout(() => {
-      syncHeight();
+      syncHeight(true);
       input.focus();
     }, 10);
 
     let finished = false;
+    let isComposing = false;
+    let lastCompositionEndTime = 0;
+    let blurTimer = null;
+
     const commitOrCancel = (shouldSave) => {
       if (finished) return;
       finished = true;
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
       const cleanVal = this.clampTaskInputText(input.value).trim();
       if (shouldSave && cleanVal) {
         if (isStackCard) {
@@ -4723,30 +4816,74 @@ export class FableFlowApp {
       }
     };
 
-    input.addEventListener('input', () => {
-      const clamped = this.clampTaskInputText(input.value.replace(/\r?\n/g, ' '));
+    const sanitizeAndFit = () => {
+      const clamped = this.clampTaskInputText(input.value);
       if (input.value !== clamped) {
         input.value = clamped;
-        this.showTelemetryToast('Task length limit reached');
+        if (clamped.length >= MAX_TASK_CHARS) {
+          this.showTelemetryToast('Task length limit reached');
+        }
       }
-      syncHeight();
+      syncHeight(true);
       this.fitUnifiedCardTaskTypography(container, addItemEl);
-      syncHeight();
+      syncHeight(true);
+    };
+
+    input.addEventListener('compositionstart', () => {
+      isComposing = true;
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
+    });
+
+    input.addEventListener('compositionend', () => {
+      isComposing = false;
+      lastCompositionEndTime = Date.now();
+      sanitizeAndFit();
+    });
+
+    input.addEventListener('input', (e) => {
+      if (isComposing || e.isComposing) {
+        // Never mutate input.value or collapse height during active IME (Pinyin / Handwriting) composition
+        syncHeight(false);
+        return;
+      }
+      sanitizeAndFit();
     });
 
     input.addEventListener('keydown', (e) => {
       e.stopPropagation();
+      const imeActive =
+        isComposing ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        Date.now() - lastCompositionEndTime < 120;
       if (e.key === 'Enter') {
+        if (imeActive) return;
         e.preventDefault();
         commitOrCancel(true);
       } else if (e.key === 'Escape') {
+        if (imeActive) return;
         e.preventDefault();
         commitOrCancel(false);
       }
     });
 
+    input.addEventListener('focus', () => {
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
+    });
+
     input.addEventListener('blur', () => {
-      commitOrCancel(true);
+      if (blurTimer) clearTimeout(blurTimer);
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        if (finished || isComposing || document.activeElement === input) return;
+        commitOrCancel(true);
+      }, 150);
     });
   }
 
@@ -4774,13 +4911,16 @@ export class FableFlowApp {
     const input = document.createElement('textarea');
     input.rows = 1;
     input.className = 'task-inline-input';
-    input.maxLength = MAX_TASK_CHARS;
     input.value = task.title || '';
     input.setAttribute('aria-label', 'Edit task directly on card');
 
-    const syncEditHeight = () => {
-      input.style.height = 'auto';
-      input.style.height = `${input.scrollHeight}px`;
+    const syncEditHeight = (collapseFirst = true) => {
+      if (collapseFirst) {
+        input.style.height = 'auto';
+      }
+      if (collapseFirst || input.scrollHeight > input.clientHeight + 2) {
+        input.style.height = `${input.scrollHeight}px`;
+      }
     };
 
     const delBtn = document.createElement('button');
@@ -4794,17 +4934,25 @@ export class FableFlowApp {
     titleWrap.appendChild(delBtn);
 
     this.fitUnifiedCardTaskTypography(container, addItemEl);
-    syncEditHeight();
+    syncEditHeight(true);
     setTimeout(() => {
-      syncEditHeight();
+      syncEditHeight(true);
       input.focus();
       input.setSelectionRange(input.value.length, input.value.length);
     }, 10);
 
     let finished = false;
+    let isComposing = false;
+    let lastCompositionEndTime = 0;
+    let blurTimer = null;
+
     const deleteThisTask = () => {
       if (finished) return;
       finished = true;
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
       if (isStackCard) {
         const card = this.getSelectedStackCard();
         if (card && Array.isArray(card.tasks)) {
@@ -4843,6 +4991,10 @@ export class FableFlowApp {
     const commitOrCancel = (shouldSave) => {
       if (finished) return;
       finished = true;
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
       if (!shouldSave) {
         if (isStackCard) this.renderStackScreen();
         else this.renderCardScreen();
@@ -4879,30 +5031,74 @@ export class FableFlowApp {
       deleteThisTask();
     });
 
-    input.addEventListener('input', () => {
-      const clamped = this.clampTaskInputText(input.value.replace(/\r?\n/g, ' '));
+    const sanitizeAndFitEdit = () => {
+      const clamped = this.clampTaskInputText(input.value);
       if (input.value !== clamped) {
         input.value = clamped;
-        this.showTelemetryToast('Task length limit reached');
+        if (clamped.length >= MAX_TASK_CHARS) {
+          this.showTelemetryToast('Task length limit reached');
+        }
       }
-      syncEditHeight();
+      syncEditHeight(true);
       this.fitUnifiedCardTaskTypography(container, addItemEl);
-      syncEditHeight();
+      syncEditHeight(true);
+    };
+
+    input.addEventListener('compositionstart', () => {
+      isComposing = true;
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
+    });
+
+    input.addEventListener('compositionend', () => {
+      isComposing = false;
+      lastCompositionEndTime = Date.now();
+      sanitizeAndFitEdit();
+    });
+
+    input.addEventListener('input', (e) => {
+      if (isComposing || e.isComposing) {
+        // Never mutate input.value or collapse height during active IME (Pinyin / Handwriting) composition
+        syncEditHeight(false);
+        return;
+      }
+      sanitizeAndFitEdit();
     });
 
     input.addEventListener('keydown', (e) => {
       e.stopPropagation();
+      const imeActive =
+        isComposing ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        Date.now() - lastCompositionEndTime < 120;
       if (e.key === 'Enter') {
+        if (imeActive) return;
         e.preventDefault();
         commitOrCancel(true);
       } else if (e.key === 'Escape') {
+        if (imeActive) return;
         e.preventDefault();
         commitOrCancel(false);
       }
     });
 
+    input.addEventListener('focus', () => {
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
+    });
+
     input.addEventListener('blur', () => {
-      commitOrCancel(true);
+      if (blurTimer) clearTimeout(blurTimer);
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        if (finished || isComposing || document.activeElement === input) return;
+        commitOrCancel(true);
+      }, 150);
     });
   }
 
@@ -5105,24 +5301,43 @@ export class FableFlowApp {
   openInputModal(title, initialValue, onSave, onDelete = null, enforceTaskCap = true) {
     this.els.modalTitle.textContent = title;
     this.els.modalInput.value = initialValue;
-    this.els.modalInput.maxLength = enforceTaskCap ? MAX_TASK_CHARS : 48;
+    this.els.modalInput.removeAttribute('maxlength');
     if (this.els.modalDelete) {
       this.els.modalDelete.classList.toggle('hidden', !onDelete);
     }
     this.els.modalOverlay.classList.remove('hidden');
     setTimeout(() => this.els.modalInput.focus(), 30);
 
-    const onInput = () => {
-      if (!enforceTaskCap) return;
-      const clamped = this.clampTaskInputText(this.els.modalInput.value);
-      if (this.els.modalInput.value !== clamped) {
-        this.els.modalInput.value = clamped;
-        this.showTelemetryToast('Task length limit reached');
+    let isComposing = false;
+    let lastCompositionEndTime = 0;
+
+    const sanitizeModalInput = () => {
+      if (enforceTaskCap) {
+        const clamped = this.clampTaskInputText(this.els.modalInput.value);
+        if (this.els.modalInput.value !== clamped) {
+          this.els.modalInput.value = clamped;
+          if (clamped.length >= MAX_TASK_CHARS) {
+            this.showTelemetryToast('Task length limit reached');
+          }
+        }
       }
       const len = this.els.modalInput.value.length;
       this.els.modalInput.style.fontSize = len > 26 ? '14.5px' : len > 18 ? '15.5px' : '16.5px';
     };
-    onInput();
+
+    const onCompStart = () => {
+      isComposing = true;
+    };
+    const onCompEnd = () => {
+      isComposing = false;
+      lastCompositionEndTime = Date.now();
+      sanitizeModalInput();
+    };
+    const onInput = (e) => {
+      if (isComposing || (e && e.isComposing)) return;
+      sanitizeModalInput();
+    };
+    sanitizeModalInput();
 
     const close = () => {
       this.els.modalOverlay.classList.add('hidden');
@@ -5138,8 +5353,21 @@ export class FableFlowApp {
       if (onDelete) onDelete();
     };
     const onKey = (e) => {
-      if (e.key === 'Enter') confirm();
-      if (e.key === 'Escape') close();
+      const imeActive =
+        isComposing ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        Date.now() - lastCompositionEndTime < 120;
+      if (e.key === 'Enter') {
+        if (imeActive) return;
+        e.preventDefault();
+        confirm();
+      }
+      if (e.key === 'Escape') {
+        if (imeActive) return;
+        e.preventDefault();
+        close();
+      }
     };
     const cleanup = () => {
       this.els.modalCancel.removeEventListener('click', close);
@@ -5149,6 +5377,8 @@ export class FableFlowApp {
       }
       this.els.modalInput.removeEventListener('keydown', onKey);
       this.els.modalInput.removeEventListener('input', onInput);
+      this.els.modalInput.removeEventListener('compositionstart', onCompStart);
+      this.els.modalInput.removeEventListener('compositionend', onCompEnd);
     };
 
     this.els.modalCancel.addEventListener('click', close);
@@ -5158,6 +5388,8 @@ export class FableFlowApp {
     }
     this.els.modalInput.addEventListener('keydown', onKey);
     this.els.modalInput.addEventListener('input', onInput);
+    this.els.modalInput.addEventListener('compositionstart', onCompStart);
+    this.els.modalInput.addEventListener('compositionend', onCompEnd);
   }
 
   setInstantCardRotation(wrapperEl, isFlipped, degValue) {
