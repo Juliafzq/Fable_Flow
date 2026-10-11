@@ -11,6 +11,12 @@ create table if not exists public.fable_flow_user_state (
   updated_at timestamptz not null default now()
 );
 
+create index if not exists idx_fable_flow_user_state_email
+  on public.fable_flow_user_state (email);
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.fable_flow_user_state to authenticated;
+
 -- Enable Row-Level Security so each user can only access their own cards & timers
 alter table public.fable_flow_user_state enable row level security;
 

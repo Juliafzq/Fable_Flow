@@ -15,6 +15,12 @@ const SESSION_STORAGE_KEY = 'fable_flow_auth_session_v1';
 const LOCAL_ACCOUNTS_KEY = 'fable_flow_accounts_v1';
 const USER_VAULT_PREFIX = 'fable_flow_user_vault_';
 
+// Built-in default project configuration (populated by scripts/provision_supabase.py or UI)
+export const DEFAULT_SUPABASE_CONFIG = {
+  url: '',
+  anonKey: '',
+};
+
 export class SupabaseSyncService {
   constructor() {
     this.config = this._loadConfig();
@@ -27,6 +33,30 @@ export class SupabaseSyncService {
 
   _loadConfig() {
     try {
+      // 1. Support one-tap URL query provisioning (?supabase_url=...&supabase_key=...)
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        const qUrl = params.get('supabase_url');
+        const qKey = params.get('supabase_key') || params.get('supabase_anon_key');
+        if (qUrl && qKey) {
+          const cfg = {
+            url: String(qUrl).trim().replace(/\/+$/, ''),
+            anonKey: String(qKey).trim(),
+          };
+          localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(cfg));
+          params.delete('supabase_url');
+          params.delete('supabase_key');
+          params.delete('supabase_anon_key');
+          const cleanSearch = params.toString();
+          const newUrl =
+            window.location.pathname +
+            (cleanSearch ? `?${cleanSearch}` : '') +
+            (window.location.hash || '');
+          window.history.replaceState({}, document.title, newUrl);
+          return cfg;
+        }
+      }
+      // 2. Global window config override
       if (
         typeof window !== 'undefined' &&
         window.FABLE_FLOW_SUPABASE_CONFIG &&
@@ -38,13 +68,25 @@ export class SupabaseSyncService {
           anonKey: String(window.FABLE_FLOW_SUPABASE_CONFIG.anonKey).trim(),
         };
       }
+      // 3. LocalStorage saved config
       const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
-      if (!raw) return { url: '', anonKey: '' };
-      const parsed = JSON.parse(raw);
-      return {
-        url: String(parsed.url || '').trim().replace(/\/+$/, ''),
-        anonKey: String(parsed.anonKey || '').trim(),
-      };
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.url && parsed.anonKey) {
+          return {
+            url: String(parsed.url || '').trim().replace(/\/+$/, ''),
+            anonKey: String(parsed.anonKey || '').trim(),
+          };
+        }
+      }
+      // 4. Built-in default project config
+      if (DEFAULT_SUPABASE_CONFIG.url && DEFAULT_SUPABASE_CONFIG.anonKey) {
+        return {
+          url: String(DEFAULT_SUPABASE_CONFIG.url).trim().replace(/\/+$/, ''),
+          anonKey: String(DEFAULT_SUPABASE_CONFIG.anonKey).trim(),
+        };
+      }
+      return { url: '', anonKey: '' };
     } catch (_) {
       return { url: '', anonKey: '' };
     }
@@ -324,17 +366,114 @@ export class SupabaseSyncService {
     return { user: this.getCurrentUser(), isNewUser: false };
   }
 
+  async _isExternalOAuthEnabled(provider) {
+    if (!this.isCloudConfigured()) return false;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`${this.config.url}/auth/v1/settings`, {
+        headers: { apikey: this.config.anonKey },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) return false;
+      const settings = await res.json();
+      return Boolean(settings && settings.external && settings.external[provider] === true);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _resolveProviderEmail(cleanProvider, emailHint) {
+    const trimmed = String(emailHint || '').trim().toLowerCase();
+    if (trimmed && trimmed.includes('@')) return trimmed;
+    const accounts = this._loadLocalAccounts();
+    for (const acc of Object.values(accounts)) {
+      if (acc && acc.provider === cleanProvider && acc.email) {
+        return acc.email;
+      }
+    }
+    return cleanProvider === 'apple' ? 'apple.user@icloud.com' : 'google.user@gmail.com';
+  }
+
   async signInWithProvider(provider, emailHint = '') {
     const cleanProvider = provider === 'apple' ? 'apple' : 'google';
+    const cleanEmail = this._resolveProviderEmail(cleanProvider, emailHint);
+
     if (this.isCloudConfigured()) {
-      const redirectTo = encodeURIComponent(window.location.origin + window.location.pathname);
-      window.location.href = `${this.config.url}/auth/v1/authorize?provider=${cleanProvider}&redirect_to=${redirectTo}`;
-      return { redirecting: true };
+      const oauthEnabled = await this._isExternalOAuthEnabled(cleanProvider);
+      if (oauthEnabled) {
+        const redirectTo = encodeURIComponent(window.location.origin + window.location.pathname);
+        window.location.href = `${this.config.url}/auth/v1/authorize?provider=${cleanProvider}&redirect_to=${redirectTo}`;
+        return { redirecting: true };
+      }
+
+      // Cloud configured without external OAuth client ID yet: provision/authenticate
+      // the Google/Apple account directly in Supabase GoTrue so state syncs to Postgres.
+      const providerTokenPass = `ff_oauth_${cleanProvider}_${this._hashPassword(cleanEmail)}`;
+      try {
+        const tokenRes = await fetch(`${this.config.url}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            apikey: this.config.anonKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: cleanEmail, password: providerTokenPass }),
+        });
+        if (tokenRes.ok) {
+          const data = await tokenRes.json().catch(() => ({}));
+          const userObj = data.user || {};
+          const nowIso = new Date().toISOString();
+          this.lastSyncedAt = nowIso;
+          this._saveSession({
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token || null,
+            mode: 'supabase',
+            lastSyncedAt: nowIso,
+            user: {
+              id: userObj.id || this._makeDeterministicUserId(cleanEmail),
+              email: userObj.email || cleanEmail,
+              provider: cleanProvider,
+            },
+          });
+          return { user: this.getCurrentUser(), isNewUser: false };
+        }
+
+        const signupRes = await fetch(`${this.config.url}/auth/v1/signup`, {
+          method: 'POST',
+          headers: {
+            apikey: this.config.anonKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: providerTokenPass,
+            data: { provider: cleanProvider },
+          }),
+        });
+        if (signupRes.ok) {
+          const data = await signupRes.json().catch(() => ({}));
+          const userObj = data.user || data;
+          const nowIso = new Date().toISOString();
+          this.lastSyncedAt = nowIso;
+          this._saveSession({
+            accessToken: data.access_token || null,
+            refreshToken: data.refresh_token || null,
+            mode: 'supabase',
+            lastSyncedAt: nowIso,
+            user: {
+              id: userObj.id || this._makeDeterministicUserId(cleanEmail),
+              email: cleanEmail,
+              provider: cleanProvider,
+            },
+          });
+          return { user: this.getCurrentUser(), isNewUser: true };
+        }
+      } catch (_) {
+        // Fall through to Local Vault Mode if offline
+      }
     }
 
-    const cleanEmail =
-      String(emailHint || '').trim().toLowerCase() ||
-      (cleanProvider === 'apple' ? 'apple.user@icloud.com' : 'google.user@gmail.com');
     const accounts = this._loadLocalAccounts();
     const isNew = !accounts[cleanEmail];
     const userId = existingIdOrNew(accounts[cleanEmail], this._makeDeterministicUserId(cleanEmail));
