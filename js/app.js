@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v53';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v53';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v53';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v53';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v53';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v54';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v54';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v54';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v54';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v54';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v53';
+} from './i18n.js?v=20261011_v54';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -164,8 +164,8 @@ export class FableFlowApp {
       localStorage.setItem('fable_flow_language', safe);
     } catch (_) {}
     applyStaticI18n();
-    if (this.els.profileLanguageStateLabel) {
-      this.els.profileLanguageStateLabel.textContent = safe === 'zh' ? '简体中文' : 'English';
+    if (this.els.profileLanguageSelect) {
+      this.els.profileLanguageSelect.value = safe;
     }
     if (this.els.profileAudioStateLabel && this.sensory) {
       this.els.profileAudioStateLabel.textContent = this.t(this.sensory.isSilentMode ? 'Off' : 'On');
@@ -620,8 +620,7 @@ export class FableFlowApp {
       profileResetTimeSelect: document.getElementById('profile-reset-time-select'),
       profileToggleAudioBtn: document.getElementById('profile-toggle-audio-btn'),
       profileAudioStateLabel: document.getElementById('profile-audio-state-label'),
-      profileLanguageBtn: document.getElementById('profile-language-btn'),
-      profileLanguageStateLabel: document.getElementById('profile-language-state-label'),
+      profileLanguageSelect: document.getElementById('profile-language-select'),
       profileSimulate5amBtn: document.getElementById('profile-simulate-5am-btn'),
       profileModalClose: document.getElementById('profile-modal-close'),
 
@@ -795,9 +794,14 @@ export class FableFlowApp {
         this.showTelemetryToast(this.t('Daily reset time: {time}', { time: padded }));
       });
     }
-    if (this.els.profileLanguageBtn) {
-      this.els.profileLanguageBtn.addEventListener('click', () => {
-        this.toggleLanguage();
+    if (this.els.profileLanguageSelect) {
+      // Opens a dropdown like Daily Reset; the language only changes once an option is picked
+      this.els.profileLanguageSelect.addEventListener('change', (e) => {
+        const next = e.target.value === 'zh' ? 'zh' : 'en';
+        if (next === getLanguage()) return;
+        this.applyLanguage(next, true);
+        this.saveState();
+        this.showTelemetryToast(next === 'zh' ? '语言：简体中文' : 'Language: English');
       });
     }
     if (this.els.profileToggleAudioBtn) {
@@ -1367,9 +1371,8 @@ export class FableFlowApp {
       this.state = cloudState;
       setLanguage(cloudState.language);
       applyStaticI18n();
-      if (this.els.profileLanguageStateLabel) {
-        this.els.profileLanguageStateLabel.textContent =
-          cloudState.language === 'zh' ? '简体中文' : 'English';
+      if (this.els.profileLanguageSelect) {
+        this.els.profileLanguageSelect.value = cloudState.language;
       }
       this.sensory.isSilentMode = Boolean(this.state.isSilentMode);
       this._todayFlipDeg = this.state.isCardFlipped ? -180 : 0;
