@@ -2869,24 +2869,24 @@ html.lang-zh .about-block-lead {
   height: 36px;
 }
 
-/* Fixed slots: 1 = Stack / Return, 2 = Zoom out, 3 = Trash, 4 = Flip.
-   The calendar's Zoom-in is the one exception and sits in slot 4. */
+/* Slots: 1 = Return / Stack, 2 = Flip, 3 = Trash, 4 = Zoom.
+   Two-button bars always use slots 1 and 4 (Today's card: Stack + Flip;
+   empty past day: Return + Zoom; calendar: Return + Zoom in), so Return and
+   Zoom sit in the same place on the stack and calendar screens. */
 #card-stack-btn,
 #stack-btn-return,
 #calendar-btn-return {
   grid-column: 1;
 }
-#stack-btn-zoomout {
+#stack-btn-flip {
   grid-column: 2;
-}
-#calendar-btn-zoomin {
-  grid-column: 4;
 }
 #stack-btn-trash {
   grid-column: 3;
 }
 #card-flip-btn,
-#stack-btn-flip {
+#stack-btn-zoomout,
+#calendar-btn-zoomin {
   grid-column: 4;
 }
 #hero-btn-grid { grid-column: 1; }
@@ -2922,3 +2922,48 @@ html.lang-zh .about-block-lead {
 #stack-btn-zoomout svg,
 #calendar-btn-zoomin svg { width: 48px; height: 48px; }
 #stack-btn-trash svg { width: 48px; height: 48px; }
+
+/* Stack screen: let the card's soft shadow fade into the bottom bar area instead of
+   being clipped at the carousel edge (which made the buttons look like they sat on a band) */
+.stack-carousel-stage {
+  margin-bottom: -48px;
+  padding-bottom: calc(clamp(4px, 1dvh, 8px) + 48px);
+}
+.stack-bottom-bar {
+  position: relative;
+  z-index: 6;
+  background: transparent;
+}
+.stack-peek-card {
+  top: calc(50% - 24px);
+  height: calc(100% - 14px - 48px);
+}
+
+/* Card is full even at the minimum font size: let the task list scroll instead of clipping */
+.card-dot-grid-body.is-overflowing {
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mini tomatoes & index column shrink together with the task text */
+.task-row {
+  grid-template-columns: calc(var(--task-fs, 24px) * 1.75) minmax(0, 1fr) calc(var(--task-fs, 24px) * 1.58);
+}
+#stack-task-list-container .task-row {
+  grid-template-columns: calc(var(--task-fs, 24px) * 1.75) minmax(0, 1fr);
+}
+.task-tomato-btn {
+  width: calc(var(--task-fs, 24px) * 1.42);
+  height: calc(var(--task-fs, 24px) * 1.42);
+}
+.task-mini-tomato-img {
+  width: calc(var(--task-fs, 24px) * 1.33);
+  height: calc(var(--task-fs, 24px) * 1.33);
+}
+.card-dot-grid-body.is-overflowing {
+  scrollbar-width: none;
+}
+.card-dot-grid-body.is-overflowing::-webkit-scrollbar {
+  display: none;
+}

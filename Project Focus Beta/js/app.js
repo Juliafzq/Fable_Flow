@@ -8,7 +8,7 @@
  *    - Mirror-polished silver metallic completion state (End -> Silver -> Reset ↺).
  *    - Authentic mechanical 2-strike Pomodoro bell ring + WebAudio tactile foley.
  * 3. Dual-Sided Today's Index Card:
- *    - Clean White Front (04-card-front.png) with up to 6 tasks, glossy single-highlight mini tomatoes,
+ *    - Clean White Front (04-card-front.png) with up to 8 tasks, glossy single-highlight mini tomatoes,
  *      adaptive task font size (24px -> 18px floor) + word/character cap (max 6 words / 36 chars),
  *      and multi-line Left -> Right dry-graphite pencil strikethrough & erase that crosses out EVERY wrapped line.
  *    - Two-way 3D Card Flip gesture (both Right -> Left and Left -> Right swipes flip the card on Front and Back).
@@ -20,22 +20,23 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v48';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v48';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v48';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v48';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v48';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v49';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v49';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v49';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v49';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v49';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v48';
+} from './i18n.js?v=20261011_v49';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
 
+const MAX_CARD_TASKS = 8;
 const MAX_TASK_WORDS = 18;
 const MAX_TASK_CHARS = 110;
 const MAX_REFLECTION_WORDS = 95;
@@ -1559,19 +1560,27 @@ export class FableFlowApp {
       rowNodes.forEach((row) => {
         row.style.paddingTop = `${padY}px`;
         row.style.paddingBottom = `${padY}px`;
+        row.style.setProperty('--task-fs', sizeStr);
       });
     };
 
+    // Minimum readable size; below this the card scrolls instead of shrinking further
+    const MIN_TASK_FONT_PX = 15;
     let unifiedSize = 24.0;
     let unifiedPadY = 9;
     applyUnifiedSize(unifiedSize, unifiedPadY);
+    if (bodyEl) bodyEl.classList.remove('is-overflowing');
 
     // Only decrease the unified font size if the whole card page is actually filled
     if (bodyEl && bodyEl.clientHeight > 0) {
-      while (bodyEl.scrollHeight > bodyEl.clientHeight + 2 && unifiedSize > 16.5) {
-        unifiedSize = Math.max(16.5, Number((unifiedSize - 0.5).toFixed(1)));
-        unifiedPadY = unifiedSize < 21.5 ? 6 : unifiedSize < 23.0 ? 7 : 8;
+      while (bodyEl.scrollHeight > bodyEl.clientHeight + 2 && unifiedSize > MIN_TASK_FONT_PX) {
+        unifiedSize = Math.max(MIN_TASK_FONT_PX, Number((unifiedSize - 0.5).toFixed(1)));
+        unifiedPadY =
+          unifiedSize < 17 ? 3 : unifiedSize < 19 ? 4 : unifiedSize < 21.5 ? 6 : unifiedSize < 23.0 ? 7 : 8;
         applyUnifiedSize(unifiedSize, unifiedPadY);
+      }
+      if (bodyEl.scrollHeight > bodyEl.clientHeight + 2) {
+        bodyEl.classList.add('is-overflowing');
       }
     }
 
@@ -3700,7 +3709,7 @@ export class FableFlowApp {
       this.bindTaskRowPencilGesture(row, task, strikeCanvas, false);
     });
 
-    if (this.state.tasks.length < 6) {
+    if (this.state.tasks.length < MAX_CARD_TASKS) {
       this.els.addItemRow.classList.remove('hidden');
     } else {
       this.els.addItemRow.classList.add('hidden');
@@ -4073,7 +4082,7 @@ export class FableFlowApp {
     if (this.els.stackAddItemRow) {
       this.els.stackAddItemRow.classList.toggle(
         'hidden',
-        !isEditing || stackTasks.length >= 6
+        !isEditing || stackTasks.length >= MAX_CARD_TASKS
       );
     }
 
@@ -4835,14 +4844,14 @@ export class FableFlowApp {
   // INLINE CARD TASK TYPING & EDITING (NO POPUP BOX ON CARD)
   // =========================================================================
 
-  startInlineAddTask(isStackCard = false) {
+  startInlineAddTask(isStackCard = false, focusNow = false) {
     const card = isStackCard ? this.getSelectedStackCard() : null;
     if (isStackCard && !card) return;
     if (isStackCard && !Array.isArray(card.tasks)) card.tasks = [];
 
     const tasksArr = isStackCard ? card.tasks : this.state.tasks;
-    if (tasksArr.length >= 6) {
-      this.showNotificationBanner(this.t('Maximum 6 tasks per card reached.'));
+    if (tasksArr.length >= MAX_CARD_TASKS) {
+      this.showNotificationBanner(this.t('Maximum 8 tasks per card reached.'));
       return;
     }
 
@@ -4897,6 +4906,10 @@ export class FableFlowApp {
 
     this.fitUnifiedCardTaskTypography(container, addItemEl);
     syncHeight(true);
+    if (focusNow) {
+      // Focus synchronously inside the key event so the phone keyboard stays open
+      input.focus();
+    }
     setTimeout(() => {
       syncHeight(true);
       input.focus();
@@ -4993,7 +5006,15 @@ export class FableFlowApp {
       if (e.key === 'Enter') {
         if (imeActive) return;
         e.preventDefault();
+        const hasText = Boolean(this.clampTaskInputText(input.value).trim());
         commitOrCancel(true);
+        // Return key moves straight on to a new item (until the card is full)
+        if (hasText) {
+          const arr = isStackCard ? (this.getSelectedStackCard() || {}).tasks || [] : this.state.tasks;
+          if (arr.length < MAX_CARD_TASKS) {
+            this.startInlineAddTask(isStackCard, true);
+          }
+        }
       } else if (e.key === 'Escape') {
         if (imeActive) return;
         e.preventDefault();
@@ -5018,7 +5039,7 @@ export class FableFlowApp {
     });
   }
 
-  startInlineEditTask(rowEl, task, isStackCard = false) {
+  startInlineEditTask(rowEl, task, isStackCard = false, focusNow = false) {
     if (!rowEl || !task) return;
     const container = isStackCard
       ? this.els.stackTaskListContainer
@@ -5066,6 +5087,10 @@ export class FableFlowApp {
 
     this.fitUnifiedCardTaskTypography(container, addItemEl);
     syncEditHeight(true);
+    if (focusNow) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
     setTimeout(() => {
       syncEditHeight(true);
       input.focus();
@@ -5208,7 +5233,19 @@ export class FableFlowApp {
       if (e.key === 'Enter') {
         if (imeActive) return;
         e.preventDefault();
+        const arrBefore = isStackCard ? (this.getSelectedStackCard() || {}).tasks || [] : this.state.tasks;
+        const idx = arrBefore.indexOf(task);
         commitOrCancel(true);
+        // Return key moves on to the next item, or starts a new one after the last item
+        const arr = isStackCard ? (this.getSelectedStackCard() || {}).tasks || [] : this.state.tasks;
+        const nextIdx = arr.indexOf(task) >= 0 ? arr.indexOf(task) + 1 : idx;
+        const nextTask = nextIdx >= 0 ? arr[nextIdx] : null;
+        if (nextTask) {
+          const rows = container.querySelectorAll('.task-row');
+          if (rows[nextIdx]) this.startInlineEditTask(rows[nextIdx], nextTask, isStackCard, true);
+        } else if (arr.length < MAX_CARD_TASKS) {
+          this.startInlineAddTask(isStackCard, true);
+        }
       } else if (e.key === 'Escape') {
         if (imeActive) return;
         e.preventDefault();
@@ -5234,8 +5271,8 @@ export class FableFlowApp {
   }
 
   openAddTaskModal() {
-    if (this.state.tasks.length >= 6) {
-      this.showNotificationBanner(this.t('Maximum 6 tasks per Daily Card reached.'));
+    if (this.state.tasks.length >= MAX_CARD_TASKS) {
+      this.showNotificationBanner(this.t('Maximum 8 tasks per card reached.'));
       return;
     }
     this.openInputModal(
@@ -5265,8 +5302,8 @@ export class FableFlowApp {
     const card = this.getSelectedStackCard();
     if (!card) return;
     if (!Array.isArray(card.tasks)) card.tasks = [];
-    if (card.tasks.length >= 6) {
-      this.showNotificationBanner(this.t('Maximum 6 tasks per Daily Card reached.'));
+    if (card.tasks.length >= MAX_CARD_TASKS) {
+      this.showNotificationBanner(this.t('Maximum 8 tasks per card reached.'));
       return;
     }
     this.openInputModal(
@@ -5677,7 +5714,7 @@ export class FableFlowApp {
       // STEP 2: FRONT OF CARD (DAILY TO-DOS)
       {
         title: 'Front Page · Daily To-Dos',
-        desc: 'Add up to 6 tasks. Swipe to cross out, swipe again to undo',
+        desc: 'Add up to 8 tasks. Swipe to cross out, swipe again to undo',
         applyPage: () => {
           this.restoreTourDemoArchiveCards();
           this.state.activePillar = 'card';

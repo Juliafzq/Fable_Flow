@@ -147,8 +147,8 @@ const ZH = {
   'Tap Card or Tomato': '点击卡片或番茄',
   'Open today’s card or focus timer': '打开今天的卡片或番茄计时',
   'Front Page · Daily To-Dos': '卡片正面 · 今日待办',
-  'Add up to 6 tasks. Swipe to cross out, swipe again to undo':
-    '最多 6 条。划一下完成，再划一下撤销',
+  'Add up to 8 tasks. Swipe to cross out, swipe again to undo':
+    '最多 8 条。划一下完成，再划一下撤销',
   'Flip Page · Daily Reflection': '卡片背面 · 今日回顾',
   'Swipe card to write reflection & attach photos': '滑动卡片翻面，写写今天、放几张照片',
   'Tap Mini Tomato': '点击小番茄',
@@ -169,8 +169,7 @@ const ZH = {
   // ---- Toasts & notifications ----
   'Task length limit reached': '字数已达上限',
   'Reflection limit reached': '字数已达上限',
-  'Maximum 6 tasks per card reached.': '每张卡片最多 6 条待办',
-  'Maximum 6 tasks per Daily Card reached.': '每张卡片最多 6 条待办',
+  'Maximum 8 tasks per card reached.': '每张卡片最多 8 条待办',
   'Photo updated in Evening Journal': '照片已更新',
   'Photo updated on archived card': '照片已更新',
   'Could not process selected image file.': '这张图片无法读取，换一张试试',
