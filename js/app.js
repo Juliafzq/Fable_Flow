@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v49';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v49';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v49';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v49';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v49';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v50';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v50';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v50';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v50';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v50';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v49';
+} from './i18n.js?v=20261011_v50';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -852,14 +852,14 @@ export class FableFlowApp {
         if (this.state.isCardFlipped) {
           this.triggerPhotoAttachment('today');
         } else {
-          this.startInlineAddTask(false);
+          this.startInlineAddTask(false, true);
         }
       });
     }
 
     this.els.addItemRow.addEventListener('click', () => {
       if (this._justFinishedCardSwipe) return;
-      this.startInlineAddTask(false);
+      this.startInlineAddTask(false, true);
     });
 
     // 2b. Matte Black Back of Card — Evening Reflection Journal & Photo Upload
@@ -1553,6 +1553,11 @@ export class FableFlowApp {
       });
       titleNodes.forEach((el) => {
         el.style.fontSize = sizeStr;
+        if (el.classList.contains('task-inline-input')) {
+          // Re-fit the text box height to this font size before measuring the card
+          el.style.height = 'auto';
+          el.style.height = `${el.scrollHeight}px`;
+        }
       });
       if (addItemEl) {
         addItemEl.style.fontSize = sizeStr;
@@ -2368,7 +2373,7 @@ export class FableFlowApp {
     if (this.els.stackAddItemRow) {
       this.els.stackAddItemRow.addEventListener('click', () => {
         if (this._justFinishedCardSwipe) return;
-        this.startInlineAddTask(true);
+        this.startInlineAddTask(true, true);
       });
     }
 
@@ -3709,6 +3714,7 @@ export class FableFlowApp {
       this.bindTaskRowPencilGesture(row, task, strikeCanvas, false);
     });
 
+    this.els.addItemRow.classList.remove('add-row-reserved');
     if (this.state.tasks.length < MAX_CARD_TASKS) {
       this.els.addItemRow.classList.remove('hidden');
     } else {
@@ -4080,6 +4086,7 @@ export class FableFlowApp {
     });
 
     if (this.els.stackAddItemRow) {
+      this.els.stackAddItemRow.classList.remove('add-row-reserved');
       this.els.stackAddItemRow.classList.toggle(
         'hidden',
         !isEditing || stackTasks.length >= MAX_CARD_TASKS
@@ -4883,7 +4890,6 @@ export class FableFlowApp {
     const input = document.createElement('textarea');
     input.rows = 1;
     input.className = 'task-inline-input';
-    input.placeholder = this.t('Type item...');
     input.setAttribute('aria-label', this.t('Type task directly on card'));
 
     const syncHeight = (collapseFirst = true) => {
@@ -4901,7 +4907,12 @@ export class FableFlowApp {
     container.appendChild(row);
 
     if (addItemEl) {
-      addItemEl.classList.add('hidden');
+      if (tasksArr.length + 1 < MAX_CARD_TASKS) {
+        // Keep its space so saving the item doesn't change the layout (no extra shrink step)
+        addItemEl.classList.add('add-row-reserved');
+      } else {
+        addItemEl.classList.add('hidden');
+      }
     }
 
     this.fitUnifiedCardTaskTypography(container, addItemEl);

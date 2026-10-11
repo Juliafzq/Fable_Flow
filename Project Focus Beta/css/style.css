@@ -2967,3 +2967,9 @@ html.lang-zh .about-block-lead {
 .card-dot-grid-body.is-overflowing::-webkit-scrollbar {
   display: none;
 }
+
+/* "+ Add item" keeps its space (invisible) while a new item is being typed */
+.add-item-row.add-row-reserved {
+  visibility: hidden;
+  pointer-events: none;
+}
