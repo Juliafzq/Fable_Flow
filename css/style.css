@@ -2869,23 +2869,33 @@ html.lang-zh .about-block-lead {
   height: 36px;
 }
 
-/* Two-button bars: outer slots */
+/* Every button type owns ONE fixed slot on every screen, so nothing jumps:
+   slot 1 = Stack / Return, slot 2 = Zoom (out or in), slot 3 = Trash, slot 4 = Flip */
 #card-stack-btn,
-#calendar-btn-return,
-#stack-btn-return {
+#stack-btn-return,
+#calendar-btn-return {
   grid-column: 1;
 }
+#stack-btn-zoomout,
+#calendar-btn-zoomin {
+  grid-column: 2;
+}
+#stack-btn-trash {
+  grid-column: 3;
+}
 #card-flip-btn,
-#calendar-btn-zoomin,
-.stack-bottom-bar.two-buttons #stack-btn-zoomout {
+#stack-btn-flip {
   grid-column: 4;
 }
-
-/* Four-button stack bar: same slots as the Timer bar */
-.stack-bottom-bar:not(.two-buttons) #stack-btn-zoomout { grid-column: 2; }
-#stack-btn-flip { grid-column: 3; }
-#stack-btn-trash { grid-column: 4; }
 #hero-btn-grid { grid-column: 1; }
 #hero-btn-playpause { grid-column: 2; }
 #hero-btn-stop { grid-column: 3; }
 #hero-btn-stopwatch { grid-column: 4; }
+
+/* All bottom-bar buttons share one row, regardless of DOM order */
+.hero-bottom-bar > *,
+.card-bottom-bar > *,
+.stack-bottom-bar > *,
+.calendar-bottom-bar > * {
+  grid-row: 1;
+}

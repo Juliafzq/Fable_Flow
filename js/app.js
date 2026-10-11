@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v45';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v45';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v45';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v45';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v45';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v46';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v46';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v46';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v46';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v46';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v45';
+} from './i18n.js?v=20261011_v46';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -3952,9 +3952,6 @@ export class FableFlowApp {
       if (this.els.stackBtnFlip && this.els.stackBtnFlip.parentElement) {
         this.els.stackBtnFlip.parentElement.classList.add('two-buttons');
       }
-      document
-        .querySelectorAll('.card-face-flip-btn[data-flip-target="stack"]')
-        .forEach((b) => b.classList.add('hidden'));
       if (this.els.stackBtnTrash) this.els.stackBtnTrash.classList.add('hidden');
       if (this.els.stackFrontEditBtn) this.els.stackFrontEditBtn.classList.add('hidden');
       if (this.els.stackBackEditBtn) this.els.stackBackEditBtn.classList.add('hidden');
@@ -3998,9 +3995,6 @@ export class FableFlowApp {
     if (this.els.stackBtnFlip && this.els.stackBtnFlip.parentElement) {
       this.els.stackBtnFlip.parentElement.classList.remove('two-buttons');
     }
-    document
-      .querySelectorAll('.card-face-flip-btn[data-flip-target="stack"]')
-      .forEach((btn) => btn.classList.remove('hidden'));
     if (this.els.stackBtnTrash) this.els.stackBtnTrash.classList.remove('hidden');
     const isEditing = Boolean(this.state.isStackEditMode);
     if (this.els.stackFrontEditBtn) {
