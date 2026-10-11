@@ -2,7 +2,7 @@
   "name": "Fable / Flow",
   "short_name": "Fable/Flow",
   "description": "Tactile daily index card and 3D heirloom tomato focus timer.",
-  "start_url": "./?v=35",
+  "start_url": "./?v=36",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -10,13 +10,13 @@
   "theme_color": "#E7E8E2",
   "icons": [
     {
-      "src": "assets/icons/apple-touch-icon.png?v=20261011_v35",
+      "src": "assets/icons/apple-touch-icon.png?v=20261011_v36",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/icons/icon-512.png?v=20261011_v35",
+      "src": "assets/icons/icon-512.png?v=20261011_v36",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

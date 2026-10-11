@@ -20,11 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v35';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v35';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v35';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v35';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v35';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v36';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v36';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v36';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v36';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v36';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -5780,10 +5780,13 @@ export class FableFlowApp {
     this.els.aboutModalOverlay.classList.remove('hidden');
     this.fitAboutCardTypography();
 
+    // Unhurried, calm reading cadence (~1.55s between blocks with a 1.15s soft fade-in)
+    const delaysMs = [250, 1550, 3100, 4650, 6200, 7750, 9300];
     blocks.forEach((blockEl, idx) => {
+      const waitMs = delaysMs[idx] !== undefined ? delaysMs[idx] : 250 + idx * 1550;
       const timerId = setTimeout(() => {
         blockEl.classList.add('visible');
-      }, 90 + idx * 380);
+      }, waitMs);
       this._aboutTimers.push(timerId);
     });
   }
@@ -5792,7 +5795,7 @@ export class FableFlowApp {
     if (!this.els.aboutLetterBlocks) return;
     const titleEl = this.els.aboutLetterBlocks.querySelector('.about-block-title');
     if (titleEl) {
-      let tSize = 23.5;
+      let tSize = 25.0;
       titleEl.style.fontSize = `${tSize}px`;
       while (tSize > 18 && titleEl.scrollWidth > titleEl.clientWidth) {
         tSize = Math.round((tSize - 0.5) * 10) / 10;
