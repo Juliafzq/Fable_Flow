@@ -2869,16 +2869,18 @@ html.lang-zh .about-block-lead {
   height: 36px;
 }
 
-/* Every button type owns ONE fixed slot on every screen, so nothing jumps:
-   slot 1 = Stack / Return, slot 2 = Zoom (out or in), slot 3 = Trash, slot 4 = Flip */
+/* Fixed slots: 1 = Stack / Return, 2 = Zoom out, 3 = Trash, 4 = Flip.
+   The calendar's Zoom-in is the one exception and sits in slot 4. */
 #card-stack-btn,
 #stack-btn-return,
 #calendar-btn-return {
   grid-column: 1;
 }
-#stack-btn-zoomout,
-#calendar-btn-zoomin {
+#stack-btn-zoomout {
   grid-column: 2;
+}
+#calendar-btn-zoomin {
+  grid-column: 4;
 }
 #stack-btn-trash {
   grid-column: 3;
