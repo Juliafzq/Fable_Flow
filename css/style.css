@@ -2973,3 +2973,35 @@ html.lang-zh .about-block-lead {
   visibility: hidden;
   pointer-events: none;
 }
+
+/* =========================================================================
+   INLINE EDIT: × delete button replaces the mini tomato (no reflow)
+   ========================================================================= */
+.task-row.is-inline-editing .task-tomato-btn {
+  display: none;
+}
+.task-row.is-inline-editing > .task-inline-delete-btn {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: center;
+  align-self: start;
+  /* Same box as the mini tomato it replaces, so the row height doesn't change */
+  width: calc(var(--task-fs, 24px) * 1.42);
+  height: calc(var(--task-fs, 24px) * 1.42);
+  margin-top: -1px;
+  background: radial-gradient(circle, rgba(15, 15, 15, 0.08) 0 12px, transparent 12.5px);
+}
+.task-row.is-inline-editing > .task-inline-delete-btn:hover {
+  background: radial-gradient(circle, rgba(139, 30, 36, 0.14) 0 12px, transparent 12.5px);
+}
+/* Past cards have no tomato column: float the × in the right margin */
+#stack-task-list-container .task-row.is-inline-editing > .task-inline-delete-btn {
+  position: absolute;
+  right: 1px;
+  top: calc(var(--row-pad-top, 9px) + (var(--task-fs, 24px) * 1.28 - 24px) / 2);
+  margin-top: 0;
+}
+/* The editing text box takes the exact space of the title text (no extra height) */
+.task-row.is-inline-editing .task-inline-input {
+  padding-bottom: 0;
+}

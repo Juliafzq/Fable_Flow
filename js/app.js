@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v50';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v50';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v50';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v50';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v50';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v51';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v51';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v51';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v51';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v51';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v50';
+} from './i18n.js?v=20261011_v51';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1566,6 +1566,7 @@ export class FableFlowApp {
         row.style.paddingTop = `${padY}px`;
         row.style.paddingBottom = `${padY}px`;
         row.style.setProperty('--task-fs', sizeStr);
+        row.style.setProperty('--row-pad-top', `${padY}px`);
       });
     };
 
@@ -4502,12 +4503,11 @@ export class FableFlowApp {
 
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) {
         this.drawGraphiteStroke(strikeCanvas, 0.0, task.isCompleted ? 1.0 : 0.0);
-        if (isStackCard) {
-          if (this.state.isStackEditMode) {
-            this.startInlineEditTask(rowEl, task, true);
-          }
-        } else {
-          this.startInlineEditTask(rowEl, task, false);
+        if (!isStackCard || this.state.isStackEditMode) {
+          // The touchend that follows must not produce iOS's delayed mousedown/click,
+          // which would land on the freshly changed layout and steal focus.
+          rowEl._suppressCompatClick = true;
+          this.startInlineEditTask(rowEl, task, isStackCard, true);
         }
         return;
       }
@@ -4539,6 +4539,16 @@ export class FableFlowApp {
 
     rowEl.addEventListener('pointerup', finishGesture);
     rowEl.addEventListener('pointercancel', finishGesture);
+    rowEl.addEventListener(
+      'touchend',
+      (e) => {
+        if (rowEl._suppressCompatClick) {
+          rowEl._suppressCompatClick = false;
+          if (e.cancelable) e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
   }
 
   /**
@@ -5040,8 +5050,16 @@ export class FableFlowApp {
       }
     });
 
+    const openedAt = performance.now();
     input.addEventListener('blur', () => {
       if (blurTimer) clearTimeout(blurTimer);
+      // A blur within the first moments after opening is a stray tap event, not the user leaving
+      if (performance.now() - openedAt < 600 && !finished) {
+        setTimeout(() => {
+          if (!finished && document.body.contains(input)) input.focus();
+        }, 0);
+        return;
+      }
       blurTimer = setTimeout(() => {
         blurTimer = null;
         if (finished || isComposing || document.activeElement === input) return;
@@ -5094,7 +5112,10 @@ export class FableFlowApp {
     delBtn.textContent = '×';
 
     titleWrap.appendChild(input);
-    titleWrap.appendChild(delBtn);
+    // The × sits in the row's tomato slot (or right margin on past cards) so the text keeps its
+    // full width and nothing rewraps or shrinks when editing starts.
+    rowEl.classList.add('is-inline-editing');
+    rowEl.appendChild(delBtn);
 
     this.fitUnifiedCardTaskTypography(container, addItemEl);
     syncEditHeight(true);
@@ -5271,8 +5292,16 @@ export class FableFlowApp {
       }
     });
 
+    const openedAt = performance.now();
     input.addEventListener('blur', () => {
       if (blurTimer) clearTimeout(blurTimer);
+      // A blur within the first moments after opening is a stray tap event, not the user leaving
+      if (performance.now() - openedAt < 600 && !finished) {
+        setTimeout(() => {
+          if (!finished && document.body.contains(input)) input.focus();
+        }, 0);
+        return;
+      }
       blurTimer = setTimeout(() => {
         blurTimer = null;
         if (finished || isComposing || document.activeElement === input) return;
