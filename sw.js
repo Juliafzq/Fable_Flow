@@ -1,5 +1,5 @@
-// Fable / Flow — Phase 3 Service Worker (Network-First with Offline Asset Cache)
-const CACHE_NAME = 'fable-flow-cache-v36';
+// Fable / Flow — Phase 3 Service Worker (Network-First with no-cache revalidation + Offline Cache)
+const CACHE_NAME = 'fable-flow-cache-v39';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -44,9 +44,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Network-first so updates are always fresh when online; fallback to cache offline
+  // Network-first with cache: 'no-cache' so the root master link always serves the latest build online
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res && res.status === 200) {
           const clone = res.clone();
