@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v52';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v52';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v52';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v52';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v52';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v53';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v53';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v53';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v53';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v53';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v52';
+} from './i18n.js?v=20261011_v53';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1713,6 +1713,21 @@ export class FableFlowApp {
   bindCardSurfaceFlipGesture() {
     this.bindTwoWayCardFlipOnWrapper(this.els.card3DWrapper, false);
     this.bindTwoWayCardFlipOnWrapper(this.els.stackCard3D, true);
+  }
+
+  /** Ignore the next click anywhere (within `ms`), e.g. the click that trails a tap which already acted. */
+  swallowNextClick(ms = 500) {
+    const blocker = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup();
+    };
+    const cleanup = () => {
+      document.removeEventListener('click', blocker, true);
+      clearTimeout(timer);
+    };
+    document.addEventListener('click', blocker, true);
+    const timer = setTimeout(cleanup, ms);
   }
 
   /** True when the pointer is on a text field the user is currently typing in (keeps IME / handwriting safe). */
@@ -4538,6 +4553,12 @@ export class FableFlowApp {
           // The touchend that follows must not produce iOS's delayed mousedown/click,
           // which would land on the freshly changed layout and steal focus.
           rowEl._suppressCompatClick = true;
+          clearTimeout(rowEl._suppressCompatTimer);
+          // iOS may deliver that touchend to the replaced title node (never reaching the row),
+          // so the flag must expire on its own instead of lingering until the next tap.
+          rowEl._suppressCompatTimer = setTimeout(() => {
+            rowEl._suppressCompatClick = false;
+          }, 350);
           this.startInlineEditTask(rowEl, task, isStackCard, true);
         }
         return;
@@ -4573,10 +4594,12 @@ export class FableFlowApp {
     rowEl.addEventListener(
       'touchend',
       (e) => {
-        if (rowEl._suppressCompatClick) {
-          rowEl._suppressCompatClick = false;
-          if (e.cancelable) e.preventDefault();
-        }
+        if (!rowEl._suppressCompatClick) return;
+        rowEl._suppressCompatClick = false;
+        clearTimeout(rowEl._suppressCompatTimer);
+        // Never swallow a tap on the × delete button
+        if (e.target && e.target.closest && e.target.closest('.task-inline-delete-btn')) return;
+        if (e.cancelable) e.preventDefault();
       },
       { passive: false }
     );
@@ -5240,14 +5263,27 @@ export class FableFlowApp {
       }
     };
 
+    let delPressedId = null;
     delBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      delPressedId = e.pointerId;
+    });
+    delBtn.addEventListener('pointerup', (e) => {
+      e.stopPropagation();
+      if (delPressedId === null || e.pointerId !== delPressedId) return;
+      delPressedId = null;
+      // The tap's own click arrives afterwards at the same spot, where the next item now sits
+      this.swallowNextClick(500);
+      deleteThisTask();
+    });
+    delBtn.addEventListener('pointercancel', () => {
+      delPressedId = null;
     });
     delBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      deleteThisTask();
+      deleteThisTask(); // no-op if pointerup already deleted
     });
 
     const sanitizeAndFitEdit = () => {
