@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v51';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v51';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v51';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v51';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v51';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v52';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v52';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v52';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v52';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v52';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v51';
+} from './i18n.js?v=20261011_v52';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1864,7 +1864,37 @@ export class FableFlowApp {
     this.sensory.playCardFlipSwoosh();
     this.saveState();
     this.renderCardScreen();
+    this.redrawStrikesAfterFlip(this.els.card3DWrapper, this.els.taskListContainer);
     this.checkFirstTimePageHint();
+  }
+
+  /**
+   * Pencil strikethroughs are positioned from the on-screen text, which is squashed/mirrored
+   * while the card is mid-rotation. Redraw them once the flip animation has finished.
+   */
+  redrawStrikesAfterFlip(wrapperEl, containerEl) {
+    if (!wrapperEl || !containerEl) return;
+    const redraw = () => {
+      containerEl.querySelectorAll('.task-row').forEach((row) => {
+        const canvas = row.querySelector('.pencil-strike-canvas');
+        if (canvas) {
+          this.drawGraphiteStroke(canvas, 0.0, row.dataset.completed === 'true' ? 1.0 : 0.0);
+        }
+      });
+    };
+    clearTimeout(wrapperEl._strikeRedrawTimer);
+    const onEnd = (e) => {
+      if (e.target !== wrapperEl || e.propertyName !== 'transform') return;
+      wrapperEl.removeEventListener('transitionend', onEnd);
+      clearTimeout(wrapperEl._strikeRedrawTimer);
+      redraw();
+    };
+    wrapperEl.addEventListener('transitionend', onEnd);
+    // Fallback in case transitionend doesn't fire (e.g. reduced motion / interrupted flip)
+    wrapperEl._strikeRedrawTimer = setTimeout(() => {
+      wrapperEl.removeEventListener('transitionend', onEnd);
+      redraw();
+    }, 650);
   }
 
   triggerStackCardFlip(direction = -1) {
@@ -1874,6 +1904,7 @@ export class FableFlowApp {
     this.sensory.playCardFlipSwoosh();
     this.saveState();
     this.renderStackScreen();
+    this.redrawStrikesAfterFlip(this.els.stackCard3D, this.els.stackTaskListContainer);
     this.checkFirstTimePageHint();
   }
 
