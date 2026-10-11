@@ -2729,3 +2729,26 @@ html.lang-zh .about-block-lead {
     padding: 4px 8px;
   }
 }
+
+/* Profile menu: identical row height in every language (CJK fonts have taller line boxes) */
+.profile-menu-row {
+  height: 35px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.profile-menu-row:first-child {
+  height: 34px;
+}
+.profile-menu-row > span,
+.profile-menu-row .profile-reset-select {
+  line-height: 1;
+}
+
+/* Timer duration input: placeholder fits inside the field (digits stay large once typed) */
+.hero-time-input::placeholder {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0;
+}

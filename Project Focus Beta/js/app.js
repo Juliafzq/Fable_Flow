@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v42zh';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v42zh';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v42zh';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v42zh';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v42zh';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v43zh';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v43zh';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v43zh';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v43zh';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v43zh';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v42zh';
+} from './i18n.js?v=20261011_v43zh';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1684,6 +1684,13 @@ export class FableFlowApp {
    */
   bindCardSurfaceFlipGesture() {
     this.bindTwoWayCardFlipOnWrapper(this.els.card3DWrapper, false);
+    this.bindTwoWayCardFlipOnWrapper(this.els.stackCard3D, true);
+  }
+
+  /** True when the pointer is on a text field the user is currently typing in (keeps IME / handwriting safe). */
+  isActivelyTypingIn(target) {
+    const field = target && target.closest ? target.closest('textarea, input') : null;
+    return Boolean(field && !field.readOnly && document.activeElement === field);
   }
 
   bindTwoWayCardFlipOnWrapper(wrapper, isStackCard = false) {
@@ -1707,8 +1714,7 @@ export class FableFlowApp {
         e.target.closest('.task-inline-input') ||
         e.target.closest('.task-inline-edit-wrap') ||
         e.target.closest('.task-inline-delete-btn') ||
-        e.target.closest('.card-back-reflection-editor') ||
-        e.target.closest('textarea, input') ||
+        this.isActivelyTypingIn(e.target) ||
         wrapper.querySelector('.task-inline-input')
       ) {
         return;
@@ -2534,7 +2540,7 @@ export class FableFlowApp {
           e.target.closest('.task-inline-input') ||
           e.target.closest('.task-inline-edit-wrap') ||
           e.target.closest('.task-inline-delete-btn') ||
-          e.target.closest('.card-back-reflection-editor') ||
+          e.target.closest('#stack-card-3d') ||
           e.target.closest('textarea, input') ||
           this.els.stackCarouselStage.querySelector('.task-inline-input')
         ) {
@@ -3932,11 +3938,9 @@ export class FableFlowApp {
         emptySlotBtn.type = 'button';
         emptySlotBtn.className = 'stack-retro-empty-slot';
         emptySlotBtn.id = 'stack-retro-add-card-btn';
-        const dPadded = String(meta.dayNum).padStart(2, '0');
         emptySlotBtn.innerHTML = `
           <span class="stack-retro-plus-icon">+</span>
-          <span class="stack-retro-slot-title">${this.t('+ Add Card for {date}', { date: `${meta.shortMonth} ${dPadded}` })}</span>
-          <span class="stack-retro-slot-sub">${this.t('Add daily to-dos & reflection retrospectively').replace(/&/g, '&amp;')}</span>
+          <span class="stack-retro-slot-title">${this.t('Add tasks / reflections retrospectively')}</span>
         `;
         emptySlotBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -5839,7 +5843,7 @@ export class FableFlowApp {
       // STEP 5: HERO TOMATO PAGE (Immediately after "Tap Mini Tomato"!)
       {
         title: 'Turn Tomato Dial',
-        desc: 'Twist tomato equator or tap digits to set time',
+        desc: 'Swipe across the tomato to turn the dial',
         applyPage: () => {
           this.restoreTourDemoArchiveCards();
           this.state.activePillar = 'timer';
@@ -5911,6 +5915,79 @@ export class FableFlowApp {
           this.setTourDotState(this.els.tourPageDot2, null, null, 0);
         },
       },
+      // STEP 5b: TAP THE DIGITAL READOUT AND TYPE A TIME
+      {
+        title: 'Tap Digits to Type Time',
+        desc: 'Tap the numbers to type minutes, e.g. 45',
+        applyPage: () => {
+          this.restoreTourDemoArchiveCards();
+          this.state.activePillar = 'timer';
+          this.state.timerSubMode = 'hero';
+          this.state.isHeroDropdownOpen = false;
+          this.closeHeroTimeEditorDOM();
+        },
+        animateFrame: (elapsedMs) => {
+          if (this.els.heroSubtitle) {
+            this.els.heroSubtitle.textContent = `01 / ${this.t('EXAMPLE TASK')}`;
+          }
+          const readout = this.els.heroReadout;
+          const editor = this.els.heroTimeEditor;
+          const input = this.els.heroTimeInput;
+          if (!readout || !editor || !input) return;
+
+          const period = 4800;
+          const t = (elapsedMs % period) / period;
+          let demoMins = 25;
+          let dot = null; // { x, y, opacity, scale, ring }
+
+          if (t < 0.22) {
+            // Dot pulses on the digital readout (tap)
+            this.closeHeroTimeEditorDOM();
+            readout.textContent = '25:00';
+            const box = this.getElementBoxInTourOverlay(readout);
+            if (box) {
+              const p = t / 0.22;
+              const pulse = Math.sin(p * Math.PI);
+              dot = { x: box.x, y: box.y, opacity: 0.1 + 0.9 * pulse, scale: 0.9 + 0.16 * pulse, ring: true };
+            }
+          } else if (t < 0.62) {
+            // Editor opens; digits get "typed" one by one
+            readout.classList.add('hidden');
+            editor.classList.remove('hidden');
+            const typeP = (t - 0.22) / 0.4;
+            input.value = typeP < 0.45 ? '4' : '45';
+            if (this.els.heroTimeUnitBadge) this.els.heroTimeUnitBadge.textContent = this.t('MIN');
+            demoMins = typeP < 0.45 ? 25 : 45;
+          } else if (t < 0.8) {
+            // Dot taps the Set button
+            readout.classList.add('hidden');
+            editor.classList.remove('hidden');
+            input.value = '45';
+            demoMins = 45;
+            const box = this.getElementBoxInTourOverlay(this.els.heroTimeSetBtn);
+            if (box) {
+              const p = (t - 0.62) / 0.18;
+              const pulse = Math.sin(p * Math.PI);
+              dot = { x: box.x, y: box.y, opacity: 0.1 + 0.9 * pulse, scale: 0.9 + 0.16 * pulse, ring: true };
+            }
+          } else {
+            // Editor closes, readout shows the new time
+            this.closeHeroTimeEditorDOM();
+            readout.textContent = '45:00';
+            demoMins = 45;
+          }
+
+          if (this.hero3D) {
+            this.hero3D.updateOdometer(demoMins * 6.0, 0, true, false);
+          }
+          if (dot) {
+            this.setTourDotState(this.els.tourPageDot, dot.x, dot.y, dot.opacity, dot.scale, dot.ring);
+          } else {
+            this.setTourDotState(this.els.tourPageDot, null, null, 0);
+          }
+          this.setTourDotState(this.els.tourPageDot2, null, null, 0);
+        },
+      },
       // STEP 6: 6-TOMATO GRID PAGE
       {
         title: 'Tomato Grid · 6 Focus Timers',
@@ -5955,7 +6032,7 @@ export class FableFlowApp {
       // STEP 7: STACK SCROLLING (Dot moves WITH the card scrolling smoothly to the next card)
       {
         title: 'Scroll Stack · Past Cards',
-        desc: 'Swipe left or right to scroll through past cards',
+        desc: 'Swipe the date bar to browse past cards',
         applyPage: () => {
           this.ensureTourDemoArchiveCards();
           this.state.activePillar = 'stack';
@@ -5980,7 +6057,8 @@ export class FableFlowApp {
           const swipeDir = cycleIdx % 2 === 0 ? -1 : 1;
           const startX = stageBox.x - swipeDir * 64;
           const endX = stageBox.x + swipeDir * 64;
-          const centerY = stageBox.y - 8;
+          const stripBox = this.getElementBoxInTourOverlay(this.els.stackDateStrip);
+          const centerY = stripBox ? stripBox.y : stageBox.y - 8;
 
           if (t < 0.14) {
             const p = t / 0.14;
@@ -6169,6 +6247,7 @@ export class FableFlowApp {
   }
 
   stopTourDemoLoop() {
+    this.closeHeroTimeEditorDOM();
     if (this._tourDemoTimer) {
       clearInterval(this._tourDemoTimer);
       this._tourDemoTimer = null;
