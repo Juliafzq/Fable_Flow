@@ -1,5 +1,5 @@
 // Fable / Flow — Phase 3 Service Worker (Network-First with Offline Asset Cache)
-const CACHE_NAME = 'fable-flow-cache-v34';
+const CACHE_NAME = 'fable-flow-cache-v35';
 const PRECACHE_URLS = [
   './',
   './index.html',
