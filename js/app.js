@@ -20,11 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v33';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v33';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v33';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v33';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v33';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v34';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v34';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v34';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v34';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v34';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -5790,29 +5790,13 @@ export class FableFlowApp {
 
   fitAboutCardTypography() {
     if (!this.els.aboutLetterBlocks) return;
-    const principles = Array.from(
-      this.els.aboutLetterBlocks.querySelectorAll('.about-block-principle')
-    );
-    const phil = this.els.aboutLetterBlocks.querySelector('.about-block-philosophy');
-    let pSize = 12.0;
-    principles.forEach((el) => {
-      el.style.fontSize = `${pSize}px`;
-    });
-    while (
-      pSize > 10.2 &&
-      principles.some((el) => el.scrollWidth > el.clientWidth)
-    ) {
-      pSize = Math.round((pSize - 0.2) * 10) / 10;
-      principles.forEach((el) => {
-        el.style.fontSize = `${pSize}px`;
-      });
-    }
-    if (phil) {
-      let philSize = 13.0;
-      phil.style.fontSize = `${philSize}px`;
-      while (philSize > 10.5 && phil.scrollWidth > phil.clientWidth) {
-        philSize = Math.round((philSize - 0.2) * 10) / 10;
-        phil.style.fontSize = `${philSize}px`;
+    const titleEl = this.els.aboutLetterBlocks.querySelector('.about-block-title');
+    if (titleEl) {
+      let tSize = 23.5;
+      titleEl.style.fontSize = `${tSize}px`;
+      while (tSize > 18 && titleEl.scrollWidth > titleEl.clientWidth) {
+        tSize = Math.round((tSize - 0.5) * 10) / 10;
+        titleEl.style.fontSize = `${tSize}px`;
       }
     }
   }
