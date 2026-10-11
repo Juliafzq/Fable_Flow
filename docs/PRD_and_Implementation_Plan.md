@@ -1,7 +1,7 @@
-# Fable / Flow — Master Product Requirements Document (v4.5) & Technical Implementation Plan
+# Fable / Flow — Master Product Requirements Document (v4.6) & Technical Implementation Plan
 
-> **Authoritative Spec & Phase 2 (`v0.7.0-mvp` / `v28`) Completion Baseline:**
-> This master document consolidates the **Product Requirements Document (v4.5)** and **Technical Implementation Plan (v4.5)**, documenting every feature, visual preference, 3D shader refinement, typography rule, gesture mechanic, onboarding flow, retrospective card creation flow, dynamic system date refresh, past-card `Edit`/`Done` mode, photo detail lightbox, single-photo expanded layout, and inline on-card task typing implemented through **Phase 1 (`v0.2.0-beta`)** and **Phase 2 (`v0.7.0-mvp` / `v28`)**, plus the **Phase 3 Publishing, Login & Cloud Sync Plan**.
+> **Authoritative Spec & Phase 3 (`v1.0.0-rc1` / `v29`) Completion Baseline:**
+> This master document consolidates the **Product Requirements Document (v4.6)** and **Technical Implementation Plan (v4.6)**, documenting every feature, visual preference, 3D shader refinement, typography rule, gesture mechanic, onboarding flow, retrospective card creation flow, dynamic system date refresh, past-card `Edit`/`Done` mode, photo detail lightbox, single-photo expanded layout, inline on-card task typing, and **Phase 3 Supabase Authentication, Per-User Cloud/Vault Sync & PWA Publishing (`v1.0.0-rc1` / `v29`)**.
 
 ---
 
@@ -120,10 +120,13 @@ The following visual and interaction preferences are **mandatory requirements** 
 | [`js/app.js`](file:///usr/local/google/home/zuqi/github/ProjectFocus/js/app.js) | Implements `toggleStackEditMode()`, `openPhotoLightbox()` / `closePhotoLightbox()`, `startInlineAddTask()` / `startInlineEditTask()`, adaptive 0/1/2 photo rendering in `renderPhotoSlotsDOM()` and `adjustReflectionTypography()`, dynamic system date refresh, retrospective card creation, two-card stack scroll transitions, smooth shrink/expand calendar zoom, and 8-step Guided Tour. |
 | [`js/tomato3D.js`](file:///usr/local/google/home/zuqi/github/ProjectFocus/js/tomato3D.js) | Implements `HeroTomato3DView` with tight `rimFade` (`|u| > 0.962`) and `GridTomatoRenderer` for the 6 heirloom shades, grey unassigned state, and bleed-free silver metallic state. |
 | [`scripts/extract_mockup_assets.py`](file:///usr/local/google/home/zuqi/github/ProjectFocus/scripts/extract_mockup_assets.py) | Crops `home-tomato.png` symmetrically around `x=385` and generates `hero-tomato-silver.png`, `grid-tomato-silver.png`, and `mini-tomato-silver.png` with a crisp `1.5px` studio silhouette ramp and zero color bleed. |
+| [`js/supabaseSync.js`](file:///usr/local/google/home/zuqi/github/ProjectFocus/js/supabaseSync.js) | **Phase 3 (`v29`):** Implements `SupabaseSyncService` with Supabase GoTrue Auth (`/auth/v1/signup`, `/auth/v1/token`, `/auth/v1/authorize` for Google/Apple OAuth, `/auth/v1/logout`), PostgREST cloud state sync (`/rest/v1/fable_flow_user_state`), and automatic multi-account Local Vault isolation (`fable_flow_user_vault_<userId>`) so users can sign up, sign in, switch accounts, and sync seamlessly both with and without external credentials. |
+| [`supabase/schema.sql`](file:///usr/local/google/home/zuqi/github/ProjectFocus/supabase/schema.sql) | **Phase 3 (`v29`):** Ready-to-run PostgreSQL table definition (`public.fable_flow_user_state`) and Row-Level Security (`auth.uid() = user_id`) policies for Supabase Free Tier (`$0/mo`). |
+| [`manifest.json`](file:///usr/local/google/home/zuqi/github/ProjectFocus/manifest.json) & [`sw.js`](file:///usr/local/google/home/zuqi/github/ProjectFocus/sw.js) | **Phase 3 (`v29`):** Progressive Web App (PWA) web manifest and network-first Service Worker with offline asset cache. |
 
 ---
 
-# Part III: Phase 3 — Publishing, User Login & Cloud Sync Options (Cost Breakdown)
+# Part III: Phase 3 — Publishing, User Login & Cloud Sync (`v1.0.0-rc1` / `v29` — Implemented)
 
 When publishing **Fable / Flow** so real users can sign in, sync their daily cards/timers/reflections/photos across devices, and use the app normally, there are **two layers of cost**:
 1. **Backend (User Login + Database + Photo Storage):** Can be **$0/month** up to thousands of active users.
@@ -149,7 +152,7 @@ When publishing **Fable / Flow** so real users can sign in, sync their daily car
 
 ---
 
-## 3. Public Mobile Testing Link (`v28`)
+## 3. Public Mobile Testing Link (`v29`)
 
 - **Public Mobile Test Link:**
-  - **`https://juliafzq.github.io/ProjectFocus/?v=28`**
+  - **`https://juliafzq.github.io/ProjectFocus/?v=29`**

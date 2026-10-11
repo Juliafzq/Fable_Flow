@@ -14,7 +14,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261010_v28" />
+  <link rel="stylesheet" href="css/style.css?v=20261011_v29" />
 </head>
 <body>
 
@@ -384,9 +384,13 @@
       </div>
     </div>
 
-    <!-- Minimal Profile Popover: Home, Guided Tour, Daily Reset, Sound On/Off -->
+    <!-- Minimal Profile Popover: Account, Home, Guided Tour, Daily Reset, Sound On/Off -->
     <div id="profile-modal-overlay" class="profile-popover-overlay hidden" role="dialog" aria-modal="true" aria-label="Profile Menu">
       <div class="profile-popover-card">
+        <button type="button" id="profile-account-btn" class="profile-menu-row">
+          <span>Account</span>
+          <span id="profile-account-state-label" class="profile-menu-val">Sign In ↗</span>
+        </button>
         <button type="button" id="profile-open-home-btn" class="profile-menu-row">
           <span>Home</span>
           <span class="profile-menu-val">↗</span>
@@ -431,6 +435,61 @@
       </div>
     </div>
 
+    <!-- Phase 3 Account & Supabase Cloud Sync Modal -->
+    <div id="auth-modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Account and Cloud Sync">
+      <div class="modal-box auth-modal-box">
+        <button type="button" id="auth-modal-close-btn" class="tour-card-close-btn" aria-label="Close account modal" title="Close">×</button>
+
+        <!-- Signed-Out View: Sign In / Create Account -->
+        <div id="auth-view-signed-out" class="auth-view-section">
+          <div class="auth-tabs-pill" role="tablist">
+            <button type="button" id="auth-tab-signin" class="auth-tab-btn active" role="tab" aria-selected="true">Sign In</button>
+            <button type="button" id="auth-tab-signup" class="auth-tab-btn" role="tab" aria-selected="false">Create Account</button>
+          </div>
+
+          <form id="auth-form" class="auth-form" novalidate>
+            <input id="auth-email-input" type="email" class="modal-input auth-input" placeholder="Email address" autocomplete="email" required />
+            <input id="auth-password-input" type="password" class="modal-input auth-input" placeholder="Password (6+ chars)" autocomplete="current-password" required />
+            <div id="auth-error-msg" class="auth-error-msg hidden" role="alert"></div>
+            <button type="submit" id="auth-submit-btn" class="modal-btn modal-btn-primary auth-primary-btn">Sign In</button>
+          </form>
+
+          <div class="auth-divider-row"><span>or</span></div>
+
+          <div class="auth-oauth-row">
+            <button type="button" id="auth-google-btn" class="auth-oauth-btn">Continue with Google</button>
+            <button type="button" id="auth-apple-btn" class="auth-oauth-btn">Continue with Apple</button>
+          </div>
+        </div>
+
+        <!-- Signed-In View: Account Summary, Sync Now & Sign Out -->
+        <div id="auth-view-signed-in" class="auth-view-section hidden">
+          <div class="modal-title" style="margin-bottom: 6px;">Account</div>
+          <div class="auth-signedin-card">
+            <div id="auth-user-email-display" class="auth-user-email">user@example.com</div>
+            <div class="auth-sync-meta-row">
+              <span id="auth-sync-mode-badge" class="auth-sync-badge">Synced</span>
+              <span id="auth-last-synced-label" class="auth-last-synced">Just now</span>
+            </div>
+          </div>
+          <div class="auth-signedin-actions">
+            <button type="button" id="auth-sync-now-btn" class="modal-btn auth-secondary-btn">Sync Now</button>
+            <button type="button" id="auth-signout-btn" class="modal-btn modal-btn-primary auth-signout-btn">Sign Out</button>
+          </div>
+        </div>
+
+        <!-- Collapsible Supabase Project Configuration (Free Tier Cloud Connection) -->
+        <div class="auth-config-footer">
+          <button type="button" id="auth-config-toggle-btn" class="auth-config-toggle-btn">Supabase Cloud Keys ▾</button>
+          <div id="auth-config-panel" class="auth-config-panel hidden">
+            <input id="auth-supabase-url-input" type="url" class="modal-input auth-input auth-config-input" placeholder="https://your-project.supabase.co" />
+            <input id="auth-supabase-key-input" type="text" class="modal-input auth-input auth-config-input" placeholder="Supabase Anon Public Key" />
+            <button type="button" id="auth-save-config-btn" class="modal-btn auth-save-config-btn">Save Keys</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Minimalist Non-Interactive Guided Tutorial Overlay (Simple Animated Dots on Page + Action, What it does, Last & Next) -->
     <div id="onboarding-overlay" class="guided-tour-overlay hidden" role="dialog" aria-modal="true" aria-label="Guided Tutorial">
       <!-- Simple Minimalist Touch Dots on the Live Page (No Boxes) -->
@@ -460,6 +519,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261010_v28"></script>
+  <script type="module" src="js/app.js?v=20261011_v29"></script>
 </body>
 </html>

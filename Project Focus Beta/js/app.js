@@ -20,10 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261010_v27';
-import { CardGestureMath } from './cardGestureMath.js?v=20261010_v27';
-import { SensoryEngine } from './sensoryEngine.js?v=20261010_v27';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261010_v27';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v29';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v29';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v29';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v29';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v29';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -38,6 +39,12 @@ export class FableFlowApp {
     this.sensory = new SensoryEngine();
     // User #2: Keep hardware haptics active without showing debug "Haptic: ..." telemetry toasts
     this.sensory.onHapticPulse = null;
+
+    this.supabaseSync = new SupabaseSyncService();
+    this._authMode = 'signin'; // 'signin' | 'signup'
+    this.supabaseSync.onAuthStateChange = () => {
+      this.syncFromAuthenticatedAccount(true);
+    };
 
     this.state = this.loadInitialState();
     this.sensory.isSilentMode = Boolean(this.state.isSilentMode);
@@ -56,6 +63,10 @@ export class FableFlowApp {
     this.startWallClockTicker();
     this.renderAll();
     this.initFirstTimeOnboarding();
+    if (this.supabaseSync.isLoggedIn()) {
+      this.syncFromAuthenticatedAccount(false);
+    }
+    this.registerServiceWorker();
   }
 
   getCurrentLogicalDateString(resetHour = 5) {
@@ -321,6 +332,9 @@ export class FableFlowApp {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
     } catch (_) {}
+    if (this.supabaseSync && this.supabaseSync.isLoggedIn()) {
+      this.supabaseSync.schedulePushCloudState(this.state);
+    }
   }
 
   resetToMockupDefault() {
@@ -467,6 +481,8 @@ export class FableFlowApp {
       deleteModalConfirm: document.getElementById('delete-modal-confirm'),
 
       profileModalOverlay: document.getElementById('profile-modal-overlay'),
+      profileAccountBtn: document.getElementById('profile-account-btn'),
+      profileAccountStateLabel: document.getElementById('profile-account-state-label'),
       profileOpenHomeBtn: document.getElementById('profile-open-home-btn'),
       profileGuidedTourBtn: document.getElementById('profile-guided-tour-btn'),
       profileResetTimeSelect: document.getElementById('profile-reset-time-select'),
@@ -474,6 +490,30 @@ export class FableFlowApp {
       profileAudioStateLabel: document.getElementById('profile-audio-state-label'),
       profileSimulate5amBtn: document.getElementById('profile-simulate-5am-btn'),
       profileModalClose: document.getElementById('profile-modal-close'),
+
+      authModalOverlay: document.getElementById('auth-modal-overlay'),
+      authModalCloseBtn: document.getElementById('auth-modal-close-btn'),
+      authViewSignedOut: document.getElementById('auth-view-signed-out'),
+      authViewSignedIn: document.getElementById('auth-view-signed-in'),
+      authTabSignin: document.getElementById('auth-tab-signin'),
+      authTabSignup: document.getElementById('auth-tab-signup'),
+      authForm: document.getElementById('auth-form'),
+      authEmailInput: document.getElementById('auth-email-input'),
+      authPasswordInput: document.getElementById('auth-password-input'),
+      authErrorMsg: document.getElementById('auth-error-msg'),
+      authSubmitBtn: document.getElementById('auth-submit-btn'),
+      authGoogleBtn: document.getElementById('auth-google-btn'),
+      authAppleBtn: document.getElementById('auth-apple-btn'),
+      authUserEmailDisplay: document.getElementById('auth-user-email-display'),
+      authSyncModeBadge: document.getElementById('auth-sync-mode-badge'),
+      authLastSyncedLabel: document.getElementById('auth-last-synced-label'),
+      authSyncNowBtn: document.getElementById('auth-sync-now-btn'),
+      authSignoutBtn: document.getElementById('auth-signout-btn'),
+      authConfigToggleBtn: document.getElementById('auth-config-toggle-btn'),
+      authConfigPanel: document.getElementById('auth-config-panel'),
+      authSupabaseUrlInput: document.getElementById('auth-supabase-url-input'),
+      authSupabaseKeyInput: document.getElementById('auth-supabase-key-input'),
+      authSaveConfigBtn: document.getElementById('auth-save-config-btn'),
 
       onboardingOverlay: document.getElementById('onboarding-overlay'),
       onboardingDismissBtn: document.getElementById('onboarding-dismiss-btn'),
@@ -578,6 +618,13 @@ export class FableFlowApp {
         this.els.profileModalOverlay.classList.add('hidden');
       });
     }
+    if (this.els.profileAccountBtn) {
+      this.els.profileAccountBtn.addEventListener('click', () => {
+        this.els.profileModalOverlay.classList.add('hidden');
+        this.openAuthModal();
+      });
+    }
+    this.bindAuthModalEvents();
     if (this.els.profileOpenHomeBtn) {
       this.els.profileOpenHomeBtn.addEventListener('click', () => {
         this.els.profileModalOverlay.classList.add('hidden');
@@ -879,6 +926,7 @@ export class FableFlowApp {
 
   openProfileModal() {
     if (!this.els.profileModalOverlay) return;
+    this.updateProfileAccountLabel();
     if (this.els.profileAudioStateLabel) {
       this.els.profileAudioStateLabel.textContent = this.sensory.isSilentMode ? 'Off' : 'On';
     }
@@ -887,6 +935,281 @@ export class FableFlowApp {
       this.els.profileResetTimeSelect.value = String(hr);
     }
     this.els.profileModalOverlay.classList.remove('hidden');
+  }
+
+  updateProfileAccountLabel() {
+    if (!this.els.profileAccountStateLabel) return;
+    const user = this.supabaseSync ? this.supabaseSync.getCurrentUser() : null;
+    if (user && user.email) {
+      const shortHandle = user.email.split('@')[0].slice(0, 12);
+      this.els.profileAccountStateLabel.textContent = `${shortHandle} ✓`;
+    } else {
+      this.els.profileAccountStateLabel.textContent = 'Sign In ↗';
+    }
+  }
+
+  bindAuthModalEvents() {
+    if (this.els.authModalCloseBtn) {
+      this.els.authModalCloseBtn.addEventListener('click', () => {
+        this.closeAuthModal();
+      });
+    }
+    if (this.els.authModalOverlay) {
+      this.els.authModalOverlay.addEventListener('click', (e) => {
+        if (!e.target.closest('.auth-modal-box')) {
+          this.closeAuthModal();
+        }
+      });
+    }
+    if (this.els.authTabSignin) {
+      this.els.authTabSignin.addEventListener('click', () => {
+        this._authMode = 'signin';
+        this.hideAuthError();
+        this.renderAuthModalState();
+      });
+    }
+    if (this.els.authTabSignup) {
+      this.els.authTabSignup.addEventListener('click', () => {
+        this._authMode = 'signup';
+        this.hideAuthError();
+        this.renderAuthModalState();
+      });
+    }
+    if (this.els.authForm) {
+      this.els.authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleAuthFormSubmit();
+      });
+    }
+    if (this.els.authGoogleBtn) {
+      this.els.authGoogleBtn.addEventListener('click', async () => {
+        await this.handleOAuthProviderLogin('google');
+      });
+    }
+    if (this.els.authAppleBtn) {
+      this.els.authAppleBtn.addEventListener('click', async () => {
+        await this.handleOAuthProviderLogin('apple');
+      });
+    }
+    if (this.els.authSyncNowBtn) {
+      this.els.authSyncNowBtn.addEventListener('click', async () => {
+        await this.supabaseSync.pushCloudState(this.state);
+        this.renderAuthModalState();
+        this.showTelemetryToast('Synced to account');
+      });
+    }
+    if (this.els.authSignoutBtn) {
+      this.els.authSignoutBtn.addEventListener('click', async () => {
+        await this.handleAuthSignOut();
+      });
+    }
+    if (this.els.authConfigToggleBtn && this.els.authConfigPanel) {
+      this.els.authConfigToggleBtn.addEventListener('click', () => {
+        this.els.authConfigPanel.classList.toggle('hidden');
+      });
+    }
+    if (this.els.authSaveConfigBtn) {
+      this.els.authSaveConfigBtn.addEventListener('click', async () => {
+        const url = this.els.authSupabaseUrlInput ? this.els.authSupabaseUrlInput.value : '';
+        const key = this.els.authSupabaseKeyInput ? this.els.authSupabaseKeyInput.value : '';
+        this.supabaseSync.saveConfig(url, key);
+        if (this.supabaseSync.isLoggedIn()) {
+          await this.supabaseSync.pushCloudState(this.state);
+        }
+        this.renderAuthModalState();
+        this.showTelemetryToast(
+          this.supabaseSync.isCloudConfigured()
+            ? 'Supabase Cloud connected'
+            : 'Saved local vault mode'
+        );
+      });
+    }
+  }
+
+  openAuthModal(mode = null) {
+    if (!this.els.authModalOverlay) return;
+    if (mode === 'signin' || mode === 'signup') {
+      this._authMode = mode;
+    }
+    this.hideAuthError();
+    if (this.els.authSupabaseUrlInput) {
+      this.els.authSupabaseUrlInput.value = (this.supabaseSync.config && this.supabaseSync.config.url) || '';
+    }
+    if (this.els.authSupabaseKeyInput) {
+      this.els.authSupabaseKeyInput.value = (this.supabaseSync.config && this.supabaseSync.config.anonKey) || '';
+    }
+    this.renderAuthModalState();
+    this.els.authModalOverlay.classList.remove('hidden');
+  }
+
+  closeAuthModal() {
+    if (!this.els.authModalOverlay) return;
+    this.els.authModalOverlay.classList.add('hidden');
+    this.hideAuthError();
+  }
+
+  showAuthError(msg) {
+    if (!this.els.authErrorMsg) return;
+    this.els.authErrorMsg.textContent = msg;
+    this.els.authErrorMsg.classList.remove('hidden');
+  }
+
+  hideAuthError() {
+    if (!this.els.authErrorMsg) return;
+    this.els.authErrorMsg.textContent = '';
+    this.els.authErrorMsg.classList.add('hidden');
+  }
+
+  renderAuthModalState() {
+    const isLogged = this.supabaseSync && this.supabaseSync.isLoggedIn();
+    const user = isLogged ? this.supabaseSync.getCurrentUser() : null;
+    if (this.els.authViewSignedOut) {
+      this.els.authViewSignedOut.classList.toggle('hidden', Boolean(isLogged));
+    }
+    if (this.els.authViewSignedIn) {
+      this.els.authViewSignedIn.classList.toggle('hidden', !isLogged);
+    }
+
+    if (!isLogged) {
+      const isSignup = this._authMode === 'signup';
+      if (this.els.authTabSignin) {
+        this.els.authTabSignin.classList.toggle('active', !isSignup);
+        this.els.authTabSignin.setAttribute('aria-selected', !isSignup ? 'true' : 'false');
+      }
+      if (this.els.authTabSignup) {
+        this.els.authTabSignup.classList.toggle('active', isSignup);
+        this.els.authTabSignup.setAttribute('aria-selected', isSignup ? 'true' : 'false');
+      }
+      if (this.els.authSubmitBtn) {
+        this.els.authSubmitBtn.textContent = isSignup ? 'Create Account' : 'Sign In';
+      }
+    } else if (user) {
+      if (this.els.authUserEmailDisplay) {
+        this.els.authUserEmailDisplay.textContent = user.email;
+      }
+      if (this.els.authSyncModeBadge) {
+        this.els.authSyncModeBadge.textContent = this.supabaseSync.isCloudConfigured()
+          ? 'Supabase Cloud'
+          : 'Synced';
+      }
+      if (this.els.authLastSyncedLabel) {
+        this.els.authLastSyncedLabel.textContent = 'Up to date';
+      }
+    }
+    this.updateProfileAccountLabel();
+  }
+
+  async handleAuthFormSubmit() {
+    this.hideAuthError();
+    const email = this.els.authEmailInput ? this.els.authEmailInput.value : '';
+    const password = this.els.authPasswordInput ? this.els.authPasswordInput.value : '';
+    try {
+      if (this._authMode === 'signup') {
+        const { user } = await this.supabaseSync.signUp(email, password);
+        await this.supabaseSync.pushCloudState(this.state);
+        if (this.els.authPasswordInput) this.els.authPasswordInput.value = '';
+        this.renderAuthModalState();
+        this.closeAuthModal();
+        this.showTelemetryToast(`Account created: ${user.email}`);
+      } else {
+        const { user } = await this.supabaseSync.signIn(email, password);
+        if (this.els.authPasswordInput) this.els.authPasswordInput.value = '';
+        await this.syncFromAuthenticatedAccount(true);
+        this.renderAuthModalState();
+        this.closeAuthModal();
+        this.showTelemetryToast(`Signed in as ${user.email}`);
+      }
+    } catch (err) {
+      this.showAuthError(err && err.message ? err.message : 'Authentication failed');
+    }
+  }
+
+  async handleOAuthProviderLogin(provider) {
+    this.hideAuthError();
+    try {
+      const emailHint = this.els.authEmailInput ? this.els.authEmailInput.value.trim() : '';
+      const res = await this.supabaseSync.signInWithProvider(provider, emailHint);
+      if (res && res.redirecting) return;
+      if (res && res.isNewUser) {
+        await this.supabaseSync.pushCloudState(this.state);
+      } else {
+        await this.syncFromAuthenticatedAccount(true);
+      }
+      this.renderAuthModalState();
+      this.closeAuthModal();
+      const user = this.supabaseSync.getCurrentUser();
+      if (user) {
+        this.showTelemetryToast(`Signed in as ${user.email}`);
+      }
+    } catch (err) {
+      this.showAuthError(err && err.message ? err.message : 'Sign-in failed');
+    }
+  }
+
+  async handleAuthSignOut() {
+    if (this.supabaseSync && this.supabaseSync.isLoggedIn()) {
+      await this.supabaseSync.pushCloudState(this.state);
+      await this.supabaseSync.signOut();
+    }
+    const fresh = this.getDefaultState();
+    fresh.hasCompletedOnboarding = true;
+    fresh.isSilentMode = this.sensory.isSilentMode;
+    this.state = fresh;
+    this._todayFlipDeg = 0;
+    this._stackFlipDeg = 0;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    } catch (_) {}
+    this.renderAuthModalState();
+    this.closeAuthModal();
+    this.renderAll();
+    this.showTelemetryToast('Signed out');
+  }
+
+  async syncFromAuthenticatedAccount(renderImmediately = true) {
+    if (!this.supabaseSync || !this.supabaseSync.isLoggedIn()) return;
+    const prevPillar = this.state && this.state.activePillar ? this.state.activePillar : 'card';
+    const cloudState = await this.supabaseSync.pullCloudState();
+    if (
+      cloudState &&
+      Array.isArray(cloudState.tasks) &&
+      Array.isArray(cloudState.timers) &&
+      cloudState.timers.length === NUM_GRID_SLOTS
+    ) {
+      const hr = typeof cloudState.dailyResetHour === 'number' ? cloudState.dailyResetHour : 5;
+      const currentLogicalKey = this.getCurrentLogicalDateString(hr);
+      const todayMeta = this.formatDateMetadataForKey(currentLogicalKey);
+      cloudState.cardDateKey = todayMeta.dateKey;
+      cloudState.cardHeaderDate = todayMeta.headerDate;
+      cloudState.cardShortDate = todayMeta.shortDate;
+      cloudState.lastRolloverLogicalDate = currentLogicalKey;
+      cloudState.hasCompletedOnboarding = true;
+      cloudState.activePillar = prevPillar;
+      this.reconcileElapsedTimers(cloudState);
+      this.state = cloudState;
+      this.sensory.isSilentMode = Boolean(this.state.isSilentMode);
+      this._todayFlipDeg = this.state.isCardFlipped ? -180 : 0;
+      this._stackFlipDeg = this.state.isStackCardFlipped ? -180 : 0;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      } catch (_) {}
+      if (renderImmediately) {
+        this.renderAll();
+      }
+    } else {
+      await this.supabaseSync.pushCloudState(this.state);
+    }
+    this.updateProfileAccountLabel();
+  }
+
+  registerServiceWorker() {
+    if (
+      typeof window !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ) {
+      navigator.serviceWorker.register('./sw.js?v=20261011_v29').catch(() => {});
+    }
   }
 
   simulateFiveAmRollover(targetDateKey = null) {

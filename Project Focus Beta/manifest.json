@@ -1,12 +1,13 @@
 {
   "name": "Fable / Flow",
-  "short_name": "Fable Flow",
-  "description": "Tactile Analog Index Card & 3D Pomodoro Timer",
-  "start_url": "./index.html",
+  "short_name": "Fable/Flow",
+  "description": "Tactile daily index card and 3D heirloom tomato focus timer.",
+  "start_url": "./?v=29",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#EAE8E3",
-  "theme_color": "#EAE8E3",
+  "background_color": "#E7E8E2",
+  "theme_color": "#E7E8E2",
   "icons": [
     {
       "src": "assets/tomatoes/home-tomato.png",
