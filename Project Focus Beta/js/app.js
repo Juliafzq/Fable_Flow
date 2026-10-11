@@ -20,11 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v39';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v39';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v39';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v39';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v39';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v40';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v40';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v40';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v40';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v40';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1275,13 +1275,27 @@ export class FableFlowApp {
     if (
       typeof window !== 'undefined' &&
       'serviceWorker' in navigator &&
-      (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      (window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1')
     ) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+
       navigator.serviceWorker
-        .register('./sw.js?v=20261011_v39', { updateViaCache: 'none' })
+        .register('./sw.js', { updateViaCache: 'none' })
         .then((reg) => {
           if (reg && typeof reg.update === 'function') {
             reg.update().catch(() => {});
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') {
+                reg.update().catch(() => {});
+              }
+            });
           }
         })
         .catch(() => {});
