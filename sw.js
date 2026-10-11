@@ -1,5 +1,5 @@
 // Fable / Flow — Phase 3 Service Worker (Network-First with Offline Asset Cache)
-const CACHE_NAME = 'fable-flow-cache-v29';
+const CACHE_NAME = 'fable-flow-cache-v30';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -9,6 +9,8 @@ const PRECACHE_URLS = [
   './js/tomato3D.js',
   './js/odometerPhysics.js',
   './js/sensoryEngine.js',
+  './assets/icons/apple-touch-icon.png',
+  './assets/icons/icon-512.png',
   './assets/tomatoes/home-tomato.png',
   './assets/tomatoes/hero-tomato-0.png',
   './assets/tomatoes/hero-tomato-silver.png'

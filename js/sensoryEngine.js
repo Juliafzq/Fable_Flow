@@ -24,20 +24,29 @@ export class SensoryEngine {
   _syncIOSAudioSession() {
     if (typeof navigator !== 'undefined' && navigator.audioSession) {
       try {
-        navigator.audioSession.type = this.isSilentMode ? 'ambient' : 'playback';
+        // Always use 'ambient' (AVAudioSessionCategoryAmbient + mixWithOthers)
+        // so sound effects layer on top of Spotify / Apple Music without ever pausing the user's music.
+        if (navigator.audioSession.type !== 'ambient') {
+          navigator.audioSession.type = 'ambient';
+        }
       } catch (_) {}
     }
   }
 
   _installIOSAudioUnlock() {
     if (typeof window === 'undefined') return;
+    this._syncIOSAudioSession();
     const unlock = () => {
       this._syncIOSAudioSession();
       this._ensureIOSHapticSwitch();
       if (this.isSilentMode) return;
+      if (this._iosUnlocked && this.audioCtx && this.audioCtx.state === 'running') {
+        return;
+      }
       const ctx = this._ensureContext();
       if (!ctx) return;
       if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
+        this._syncIOSAudioSession();
         ctx.resume().catch(() => {});
       }
       if (!this._iosUnlocked) {
