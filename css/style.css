@@ -2752,3 +2752,74 @@ html.lang-zh .about-block-lead {
   font-weight: 700;
   letter-spacing: 0;
 }
+
+/* =========================================================================
+   ON-CARD FLIP BUTTON (top-right of every card face)
+   ========================================================================= */
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.card-face-flip-btn {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1.5px solid rgba(15, 15, 15, 0.22);
+  background: transparent;
+  color: #141414;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+/* Bigger invisible tap target (44px) without changing the look */
+.card-face-flip-btn::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.card-face-flip-btn:active {
+  transform: scale(0.92);
+  background: rgba(15, 15, 15, 0.08);
+}
+
+.card-face-flip-btn-dark {
+  border-color: rgba(245, 245, 242, 0.32);
+  color: #F5F5F2;
+}
+
+.card-face-flip-btn-dark:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Cards don't scroll, so let our swipe handler own every touch on them
+   (prevents the browser cancelling slightly diagonal swipes) */
+.daily-card-3d,
+.daily-card-3d .card-face,
+.daily-card-3d .task-row {
+  touch-action: none;
+}
+
+.daily-card-3d textarea:not([readonly]) {
+  touch-action: manipulation;
+}
+
+@media (max-width: 340px) {
+  .card-face-flip-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .card-header-actions {
+    gap: 6px;
+  }
+}

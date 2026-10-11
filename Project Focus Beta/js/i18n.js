@@ -207,6 +207,7 @@ const ZH = {
   'Open Card Stack Archive': '打开卡片堆',
   'Open Chronological Card Stack Archive': '打开卡片堆',
   'Flip Card 180 Degrees': '翻转卡片',
+  'Flip card': '翻面',
   'Flip Card 180° (White Front ↔ Matte Black Back)': '翻转卡片',
   'Timer readout. Tap to type duration in minutes or HH:MM': '剩余时间，点击输入时长',
   'Tap digits to type time (0–180 min or HH:MM)': '点击数字输入时长',

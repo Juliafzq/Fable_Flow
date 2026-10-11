@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v43zh';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v43zh';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v43zh';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v43zh';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v43zh';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v44zh';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v44zh';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v44zh';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v44zh';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v44zh';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v43zh';
+} from './i18n.js?v=20261011_v44zh';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -832,6 +832,19 @@ export class FableFlowApp {
         this.triggerCardFlip(-1);
       });
     }
+
+    // Flip button printed on every card face (Today front/back, past card front/back)
+    document.querySelectorAll('.card-face-flip-btn').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (btn.dataset.flipTarget === 'stack') {
+          this.triggerStackCardFlip(-1);
+        } else {
+          this.triggerCardFlip(-1);
+        }
+      });
+    });
 
     if (this.els.cardPlusBtn) {
       this.els.cardPlusBtn.addEventListener('click', () => {
@@ -1700,6 +1713,9 @@ export class FableFlowApp {
     let startY = null;
     let activePointerId = null;
     let isDraggingFlip = false;
+    let lastX = null;
+    let lastY = null;
+    let startTime = 0;
 
     const getBaseDeg = () => (isStackCard ? this._stackFlipDeg : this._todayFlipDeg);
     const getIsFlipped = () =>
@@ -1714,6 +1730,7 @@ export class FableFlowApp {
         e.target.closest('.task-inline-input') ||
         e.target.closest('.task-inline-edit-wrap') ||
         e.target.closest('.task-inline-delete-btn') ||
+        e.target.closest('.card-face-flip-btn') ||
         this.isActivelyTypingIn(e.target) ||
         wrapper.querySelector('.task-inline-input')
       ) {
@@ -1722,6 +1739,9 @@ export class FableFlowApp {
       const pt = this.getPointerXY(e);
       startX = pt.x;
       startY = pt.y;
+      lastX = pt.x;
+      lastY = pt.y;
+      startTime = performance.now();
       activePointerId = e.pointerId;
       isDraggingFlip = false;
     });
@@ -1733,8 +1753,10 @@ export class FableFlowApp {
       const pt = this.getPointerXY(e);
       const dx = pt.x - startX;
       const dy = pt.y - startY;
+      lastX = pt.x;
+      lastY = pt.y;
 
-      if (!isDraggingFlip && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+      if (!isDraggingFlip && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy) * 0.9) {
         isDraggingFlip = true;
         const activeEl = document.activeElement;
         if (
@@ -1766,9 +1788,15 @@ export class FableFlowApp {
         return;
       }
 
-      const pt = e.clientX !== undefined ? this.getPointerXY(e) : { x: startX, y: startY };
+      // pointercancel (browser took over the touch) reports unreliable coords: use the last move
+      const pt =
+        e.type === 'pointercancel' || e.clientX === undefined
+          ? { x: lastX !== null ? lastX : startX, y: lastY !== null ? lastY : startY }
+          : this.getPointerXY(e);
       const dx = pt.x - startX;
       const dy = pt.y - startY;
+      const elapsed = Math.max(1, performance.now() - startTime);
+      const isFlick = Math.abs(dx) >= 10 && Math.abs(dx) / elapsed > 0.35;
       startX = null;
       startY = null;
       activePointerId = null;
@@ -1789,7 +1817,7 @@ export class FableFlowApp {
       const classification = CardGestureMath.classifyGesture(dx, dy, false);
       if (
         classification === 'flipCard' ||
-        (Math.abs(dx) >= 22 && Math.abs(dx) > Math.abs(dy) * 1.15)
+        ((Math.abs(dx) >= 16 || isFlick) && Math.abs(dx) > Math.abs(dy) * 0.9)
       ) {
         const dir = dx >= 0 ? 1 : -1;
         if (isStackCard) {

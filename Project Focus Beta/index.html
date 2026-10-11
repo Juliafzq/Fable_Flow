@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Fable / Flow" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261011_v43zh" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261011_v43zh" />
-  <link rel="manifest" href="manifest.json?v=20261011_v43zh" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261011_v44zh" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261011_v44zh" />
+  <link rel="manifest" href="manifest.json?v=20261011_v44zh" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261011_v43zh" />
+  <link rel="stylesheet" href="css/style.css?v=20261011_v44zh" />
 </head>
 <body>
 
@@ -78,6 +78,7 @@
           <div class="card-face card-face-front">
             <div class="card-header-bar">
               <h1 id="card-date-header" class="card-date-title">TUESDAY — OCT 06</h1>
+              <button type="button" class="card-face-flip-btn" data-flip-target="today" aria-label="Flip card" title="Flip card"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9.5C5.4 6.3 8.5 4.2 12 4.2c3.2 0 6 1.7 7.4 4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.8 4.6v4.3h-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 14.5c-1.4 3.2-4.5 5.3-8 5.3-3.2 0-6-1.7-7.4-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.2 19.4v-4.3h4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
 
             <div class="card-dot-grid-body">
@@ -90,6 +91,7 @@
           <div class="card-face card-face-back">
             <div class="card-back-header-bar">
               <h2 id="card-back-date-header" class="card-back-date-title">TUESDAY — OCT 06</h2>
+              <button type="button" class="card-face-flip-btn card-face-flip-btn-dark" data-flip-target="today" aria-label="Flip card" title="Flip card"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9.5C5.4 6.3 8.5 4.2 12 4.2c3.2 0 6 1.7 7.4 4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.8 4.6v4.3h-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 14.5c-1.4 3.2-4.5 5.3-8 5.3-3.2 0-6-1.7-7.4-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.2 19.4v-4.3h4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
 
             <div class="card-back-body">
@@ -176,16 +178,6 @@
               <button type="button" id="hero-time-set-btn" class="hero-time-set-btn">Set</button>
             </div>
             <div class="hero-time-popover">
-              <div class="hero-time-presets" aria-label="Quick duration presets">
-                <button type="button" class="hero-preset-pill" data-mins="15">15m</button>
-                <button type="button" class="hero-preset-pill" data-mins="25">25m</button>
-                <button type="button" class="hero-preset-pill" data-mins="45">45m</button>
-                <button type="button" class="hero-preset-pill" data-mins="60">60m</button>
-                <button type="button" class="hero-preset-pill" data-mins="90">90m</button>
-                <button type="button" class="hero-preset-pill" data-mins="120">120m</button>
-                <button type="button" class="hero-preset-pill" data-mins="150">150m</button>
-                <button type="button" class="hero-preset-pill" data-mins="180">180m</button>
-              </div>
               <div class="hero-time-hint">Type minutes (0–180) or HH:MM (e.g. 02:30) · Enter to set</div>
             </div>
           </div>
@@ -256,7 +248,10 @@
             <div class="card-face card-face-front">
               <div class="card-header-bar">
                 <h2 id="stack-card-date-header" class="card-date-title">MONDAY — OCT 05</h2>
-                <button type="button" id="stack-front-edit-btn" class="stack-card-edit-btn" aria-label="Edit past card">Edit</button>
+                <div class="card-header-actions">
+                  <button type="button" id="stack-front-edit-btn" class="stack-card-edit-btn" aria-label="Edit past card">Edit</button>
+                  <button type="button" class="card-face-flip-btn" data-flip-target="stack" aria-label="Flip card" title="Flip card"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9.5C5.4 6.3 8.5 4.2 12 4.2c3.2 0 6 1.7 7.4 4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.8 4.6v4.3h-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 14.5c-1.4 3.2-4.5 5.3-8 5.3-3.2 0-6-1.7-7.4-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.2 19.4v-4.3h4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
               </div>
               <div class="card-dot-grid-body">
                 <div id="stack-task-list-container" class="task-list-container"></div>
@@ -268,7 +263,10 @@
             <div class="card-face card-face-back">
               <div class="card-back-header-bar">
                 <h2 id="stack-card-back-date-header" class="card-back-date-title">MONDAY — OCT 05</h2>
-                <button type="button" id="stack-back-edit-btn" class="stack-card-edit-btn stack-card-edit-btn-dark" aria-label="Edit past card">Edit</button>
+                <div class="card-header-actions">
+                  <button type="button" id="stack-back-edit-btn" class="stack-card-edit-btn stack-card-edit-btn-dark" aria-label="Edit past card">Edit</button>
+                  <button type="button" class="card-face-flip-btn card-face-flip-btn-dark" data-flip-target="stack" aria-label="Flip card" title="Flip card"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9.5C5.4 6.3 8.5 4.2 12 4.2c3.2 0 6 1.7 7.4 4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.8 4.6v4.3h-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 14.5c-1.4 3.2-4.5 5.3-8 5.3-3.2 0-6-1.7-7.4-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4.2 19.4v-4.3h4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
               </div>
               <div class="card-back-body">
                 <textarea
@@ -558,6 +556,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261011_v43zh"></script>
+  <script type="module" src="js/app.js?v=20261011_v44zh"></script>
 </body>
 </html>
