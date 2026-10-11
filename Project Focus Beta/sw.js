@@ -1,11 +1,12 @@
 // Fable / Flow — Phase 3 Service Worker (Network-First with no-cache revalidation + Offline Cache)
-const CACHE_NAME = 'fable-flow-cache-v41';
+const CACHE_NAME = 'fable-flow-cache-v44-zh';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './css/style.css',
   './js/app.js',
   './js/supabaseSync.js',
+  './js/i18n.js',
   './js/tomato3D.js',
   './js/odometerPhysics.js',
   './js/sensoryEngine.js',

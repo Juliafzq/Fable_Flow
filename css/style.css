@@ -2663,3 +2663,163 @@ html.mobile-landscape-locked .app-viewport {
 }
 
 
+
+/* =========================================================================
+   SIMPLIFIED CHINESE (html.lang-zh) LAYOUT TUNING
+   Chinese glyphs are full-width, so keep lines balanced and avoid 1–2 char widows.
+   ========================================================================= */
+html.lang-zh .about-block-lead,
+html.lang-zh .about-block-principle,
+html.lang-zh .about-block-philosophy,
+html.lang-zh .tour-action-desc,
+html.lang-zh .stack-retro-slot-sub,
+html.lang-zh #delete-modal-desc {
+  text-wrap: pretty;
+  line-break: strict;
+}
+
+html.lang-zh .about-block-lead,
+html.lang-zh .about-block-philosophy {
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+html.lang-zh .about-block-principle {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* Principle label on its own line, description underneath */
+html.lang-zh .about-principle-label {
+  display: block;
+  font-size: 17px;
+  margin-bottom: 1px;
+}
+
+/* Italic serif doesn't suit Chinese characters */
+html.lang-zh .about-block-signoff {
+  font-family: inherit;
+  font-style: normal;
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+html.lang-zh .tour-action-desc {
+  padding: 0 12px;
+}
+
+html.lang-zh .dropdown-task-item {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+html.lang-zh .about-block-lead {
+  white-space: pre-line;
+}
+
+/* Very narrow phones (iPhone SE 1st gen, 320px): keep the past-card header + Edit pill inside the card */
+@media (max-width: 340px) {
+  .card-date-title,
+  .card-back-date-title {
+    font-size: 16px;
+  }
+  .stack-card-edit-btn {
+    min-width: 46px;
+    padding: 4px 8px;
+  }
+}
+
+/* Profile menu: identical row height in every language (CJK fonts have taller line boxes) */
+.profile-menu-row {
+  height: 35px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.profile-menu-row:first-child {
+  height: 34px;
+}
+.profile-menu-row > span,
+.profile-menu-row .profile-reset-select {
+  line-height: 1;
+}
+
+/* Timer duration input: placeholder fits inside the field (digits stay large once typed) */
+.hero-time-input::placeholder {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* =========================================================================
+   ON-CARD FLIP BUTTON (top-right of every card face)
+   ========================================================================= */
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.card-face-flip-btn {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1.5px solid rgba(15, 15, 15, 0.22);
+  background: transparent;
+  color: #141414;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+/* Bigger invisible tap target (44px) without changing the look */
+.card-face-flip-btn::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.card-face-flip-btn:active {
+  transform: scale(0.92);
+  background: rgba(15, 15, 15, 0.08);
+}
+
+.card-face-flip-btn-dark {
+  border-color: rgba(245, 245, 242, 0.32);
+  color: #F5F5F2;
+}
+
+.card-face-flip-btn-dark:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Cards don't scroll, so let our swipe handler own every touch on them
+   (prevents the browser cancelling slightly diagonal swipes) */
+.daily-card-3d,
+.daily-card-3d .card-face,
+.daily-card-3d .task-row {
+  touch-action: none;
+}
+
+.daily-card-3d textarea:not([readonly]) {
+  touch-action: manipulation;
+}
+
+@media (max-width: 340px) {
+  .card-face-flip-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .card-header-actions {
+    gap: 6px;
+  }
+}
