@@ -20,3 +20,6 @@ out/
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+qa/shots/
+qa/__pycache__/

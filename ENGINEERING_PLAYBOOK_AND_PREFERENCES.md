@@ -1,6 +1,7 @@
 # Engineering Postmortem, Working Preferences & Quality Playbook
 **Prepared for:** Zuqi  
 **Purpose:** Candid root-cause analysis of why *Fable / Flow (Project Focus)* required 25+ back-and-forth correction cycles, paired with a reusable **Product & Visual Preferences Guide + Pre-Handoff QA Checklist** to give your next engineer (or AI coding agent) on Day 1.
+**Last updated:** Oct 11 — added Part 1B (reflection on the v37 → v54 session), new preferences in Part 2 (§7–§12), the targeted QA gate and iOS interaction checklist in Part 3, and new rules in the Part 4 prompt.
 
 ---
 
@@ -33,6 +34,49 @@ Looking back across all 25 versions of Phase 1 and Phase 2, **over 75% of our it
   * Leaving already-assigned tasks inside the timer task-assignment dropdown.
   * Deleting a task without resetting its linked tomato timer.
   * Shipping dummy history (`Math Study`, `Build Deck`, past September/October cards) when a new user should start with a clean slate and only one `Example Task`.
+
+---
+
+## Part 1B: Oct 11 Session Reflection (v37 → v54)
+
+Today's session shipped a lot (Chinese language, IME-safe input, bottom-bar redesign, 8-item cards, Return-to-next, no-reflow editing), but **you still caught five bugs that should never have reached you**. They share a few root causes that are different from Part 1, which makes them worth writing down.
+
+### What went wrong
+
+| # | Bug you had to catch | Root cause |
+|---|---|---|
+| 1 | Text size **bounced up and down while typing** (v49) | I checked the final layout of a full card, but never the size **after each keystroke**. The shrink loop measured the editing box at its old pixel height, so results oscillated. |
+| 2 | Edit field **sometimes closed on the first tap** (v50) | I tested only in headless Chrome, which delivers a tap's follow-up mouse events immediately. iOS delivers them later, onto the layout that just changed under the finger. Worse, my harness had focus emulation off, so **blur events never fired and the blur tests passed without testing anything**. |
+| 3 | **Strikethroughs disappeared after flipping back** (v51) | The same mistake as the Part 1 tutorial dot: geometry measured while the card was mid-rotation. I fixed the symptom last time without turning it into a general rule. |
+| 4 | **× needed one tap sometimes, two other times** (v51 → v53) | My own v51 fix introduced it. A "suppress next click" flag on the row was never cleared on iOS (iOS sends `touchend` to the replaced node, which no longer bubbles to the row). Once the × moved inside the row, it ate the first tap. |
+| 5 | **Swipe-to-flip on past cards silently disappeared** (v38 → noticed later) | To make scrolling smoother, I repurposed the card swipe for scrolling and removed flipping, without telling you there was a trade-off. |
+
+Two more patterns slowed us down without being outright bugs:
+
+- **Literal reading of "same size".** I first enlarged the buttons' tap boxes (44 → 54 px) while the drawn icons stayed small. You meant *how big the icons look*. I had to measure the icon glyphs' bounding boxes to get it right.
+- **Requirements that conflicted.** "Two-button bars use the same spots" and "Zoom/Flip never jump" can't both hold, because the past card shows Zoom and Flip together. I should have shown the conflict and the options **before** shipping a layout. Once I did (v46/v47), you resolved it in one answer.
+
+### What worked
+
+- **Branch + preview for big changes.** The `zh-cn` branch let you review the Chinese UI on a preview link and ask for changes before anything hit the live app.
+- **Showing options when there's a real trade-off.** Translation review, stack flip vs. scroll, × placement, button slots: each was settled in one round.
+- **A failing test first, then the fix.** For the last three bugs I reproduced the problem in a test (including simulating iOS-only behavior) before changing code. That also caught a new bug before shipping: after a first-tap delete, the trailing click landed on the next item's tomato and opened the timer.
+- **Targeted QA.** Once the checks were grouped by feature, a fix was verified in 15–25 seconds instead of 3.5 minutes, so there was no excuse to skip it.
+
+### Lessons (rules from now on)
+
+1. **Test the interaction, not just the end state.** Keystroke by keystroke, tap by tap, before and after an animation.
+2. **Headless Chrome is not iOS Safari.** Enable focus emulation, use real CDP touch events, and explicitly simulate iOS-specific sequencing:
+   - delayed compat clicks
+   - `touchend` delivered to a detached node
+   - focus outside a user gesture not opening the keyboard
+
+   Then **say plainly what still needs a real device**.
+3. **Never measure layout while it's transformed, animating, or stale.** Re-measure after `transitionend`, and re-size dependent elements (like textareas) before measuring their container.
+4. **Every fix gets a regression check on its neighbors.** A fix that adds state (flags, timers, listeners) needs a test of what happens if that state is never cleared.
+5. **When requirements conflict, stop and present options.** Don't pick one silently.
+6. **Measure what the user perceives.** For "size", that's the visible glyph; for "same location", screen coordinates across screens; for "no jumping", values over time.
+7. **A harness error is not a pass.** Port collisions, leftover Chrome processes and multi-line output all produced false results today. QA tooling needs its own sanity checks.
 
 ---
 
@@ -75,6 +119,34 @@ Looking back across all 25 versions of Phase 1 and Phase 2, **over 75% of our it
 ### 6. Clean Default State
 * **Zero Fake History in Production/Test Links:** When a user opens the app for the first time, they must see a **clean profile**—zero pre-populated past cards in the archive and only **one** `Example Task` on Today's Card.
 
+### 7. Consistency & Predictability of Controls
+* **One control, one place.** A button keeps the same screen position on every screen. Two-button bars use the outer slots. Controls of the same kind share the same size and line weight as their reference (the Timer bar).
+* **No duplicates.** If a control already exists (bottom-bar Flip), don't add a second one on the card.
+* **Works on the first touch, every time.** Any "sometimes" behavior is a bug.
+
+### 8. Zero Friction Input
+* Tapping "add" goes straight to typing with the keyboard open. No placeholder screen, no extra tap.
+* Return moves on to the next item, like a real list.
+* Starting to edit must not move anything else on the card.
+* Shrinking text happens together, smoothly, in one direction, and never below a readable minimum (15 px).
+
+### 9. Language & Copy
+* Translations must read naturally, the way a native app would say it, never word-for-word. Show the full translation list for review before implementing.
+* Keep brand name, dates and calendar in English unless told otherwise.
+* Translated UI must fit the same space as English: same menu size, condensed copy where needed, no one- or two-character orphan lines.
+* Choices like language are made through the same control pattern as similar settings (a dropdown like Daily Reset), never by surprise toggling.
+
+### 10. Ask When There's a Real Trade-off
+* Present 2–3 concrete options with a recommendation, then implement the choice. Don't silently trade away an existing behavior (like swipe-to-flip) to get another.
+
+### 11. Shipping Workflow
+* Big or risky features go on a branch with a preview link first; merge only when asked ("merge").
+* "Push to the master link" means deploy to `main` → `https://juliafzq.github.io/Fable_Flow/`, with a cache-busted version.
+* After shipping, say what changed, what was verified, and what couldn't be verified.
+
+### 12. QA Speed
+* Run a **thorough check of the impacted features only**, not the full suite, unless the change is large (e.g. a merge). Fast enough that it's never skipped.
+
 ---
 
 ## Part 3: Mandatory Pre-Handoff QA Protocol (For Your Next Engineer)
@@ -104,6 +176,18 @@ flowchart LR
    * **iOS 18+ Haptics:** Use a hidden `<label><input type="checkbox" switch></label>` toggle inside user gestures so iPhone Safari triggers native Taptic Engine haptics.
 4. **End-to-End State Trace:**
    * Trace every action from start to finish: *What happens before the action? What changes during the action? Where should the user land after the action? What happens if the linked item is edited or deleted?*
+
+5. **Targeted QA Gate (`qa/run_qa.sh <groups>`), required before every push:**
+   * Pick the groups the change touches: `bars`, `flip`, `edit`, `typing`, `profile`, `layout` (or `all` for merges). Groups run in parallel; a typical fix is verified in 15–25 s.
+   * If the change touches something no group covers, **write the check first and watch it fail**, then fix, then add it to the right group.
+   * Interaction checks must measure behavior over time (every keystroke, every tap, before and after animations), not just the final screenshot.
+6. **iOS Interaction Checklist (headless Chrome won't show these by itself):**
+   * **Focus inside the gesture:** call `focus()` synchronously in the tap/click handler, or the iOS keyboard won't open.
+   * **Delayed compat click:** after a tap that changes the layout under the finger, iOS fires a click a moment later on whatever is now there. Either act on `pointerup` and swallow the trailing click, or cancel it on `touchend`.
+   * **`touchend` to a detached node:** if the tapped element was replaced, `touchend` won't bubble to its old ancestors. Any flag waiting for it must expire on a timer.
+   * **Blur right after opening** is usually a stray event: re-focus within a short grace period.
+   * **IME:** never write to `value` while composing; ignore Return during composition and just after `compositionend`; strip U+2006.
+   * **Harness:** enable `Emulation.setFocusEmulationEnabled`, use `Input.dispatchTouchEvent`, unique ports and profiles per run, clean up Chrome between runs, and print single-line JSON results.
 
 ---
 
@@ -144,4 +228,21 @@ Before writing any code or showing me any build, you MUST follow these rules str
 5. IOS SAFARI FIRST:
    - Build for real iPhone Safari from Day 1: responsive `flex: 1; min-height: 0` layouts that fit `393×660`, matched `<meta name="theme-color">`, WebKit `preserve-3d` backface isolation (`visibility: hidden`), capture-phase WebAudio unlock + `navigator.audioSession.type = 'playback'`, and iOS 18+ `<input type="checkbox" switch>` Taptic Engine haptics.
    - Always ship a clean default state (no fake history or multiple dummy tasks) and provide cache-busted links (`?v=N`).
+
+6. TEST INTERACTIONS, NOT JUST SCREENSHOTS:
+   - Reproduce every reported bug in a failing test before fixing it.
+   - Measure behavior over time: every keystroke while typing, every tap (first tap must work), before/after every animation.
+   - Never measure layout while it's rotating/animating; re-measure after the transition ends.
+   - Headless Chrome is not iOS Safari: enable focus emulation, use real touch events, simulate iOS delayed clicks and detached-node touchend, and tell me what still needs a real iPhone.
+   - Run a thorough check of the impacted features before every push (targeted, fast), and the full suite for big merges.
+
+7. CONSISTENCY & ZERO FRICTION:
+   - A control keeps the same position and size on every screen; no duplicate controls.
+   - "Add" goes straight to typing with the keyboard open; Return moves to the next item; starting to edit never moves the layout.
+   - Any action that works "sometimes once, sometimes twice" is a bug.
+
+8. ASK ON TRADE-OFFS, NATURAL COPY:
+   - If two of my requirements conflict, or a change would remove an existing behavior, show me 2–3 options with a recommendation before implementing.
+   - Translations must sound native (not word-for-word), fit the same space as English, and be shown to me for review first.
+   - Put big features on a branch with a preview link; merge only when I say so.
 ```
