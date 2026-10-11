@@ -2663,3 +2663,69 @@ html.mobile-landscape-locked .app-viewport {
 }
 
 
+
+/* =========================================================================
+   SIMPLIFIED CHINESE (html.lang-zh) LAYOUT TUNING
+   Chinese glyphs are full-width, so keep lines balanced and avoid 1–2 char widows.
+   ========================================================================= */
+html.lang-zh .about-block-lead,
+html.lang-zh .about-block-principle,
+html.lang-zh .about-block-philosophy,
+html.lang-zh .tour-action-desc,
+html.lang-zh .stack-retro-slot-sub,
+html.lang-zh #delete-modal-desc {
+  text-wrap: pretty;
+  line-break: strict;
+}
+
+html.lang-zh .about-block-lead,
+html.lang-zh .about-block-philosophy {
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+html.lang-zh .about-block-principle {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* Principle label on its own line, description underneath */
+html.lang-zh .about-principle-label {
+  display: block;
+  font-size: 17px;
+  margin-bottom: 1px;
+}
+
+/* Italic serif doesn't suit Chinese characters */
+html.lang-zh .about-block-signoff {
+  font-family: inherit;
+  font-style: normal;
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+html.lang-zh .tour-action-desc {
+  padding: 0 12px;
+}
+
+html.lang-zh .dropdown-task-item {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+html.lang-zh .about-block-lead {
+  white-space: pre-line;
+}
+
+/* Very narrow phones (iPhone SE 1st gen, 320px): keep the past-card header + Edit pill inside the card */
+@media (max-width: 340px) {
+  .card-date-title,
+  .card-back-date-title {
+    font-size: 16px;
+  }
+  .stack-card-edit-btn {
+    min-width: 46px;
+    padding: 4px 8px;
+  }
+}

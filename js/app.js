@@ -20,11 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v41';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v41';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v41';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v41';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v41';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v42zh';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v42zh';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v42zh';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v42zh';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v42zh';
+import {
+  t as i18nT,
+  setLanguage,
+  getLanguage,
+  registerStaticI18n,
+  applyStaticI18n,
+} from './i18n.js?v=20261011_v42zh';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -60,6 +67,7 @@ export class FableFlowApp {
     this._isDraggingDateStrip = false;
 
     this.initDOM();
+    this.initLanguage();
     this.initMobilePortraitLock();
     this.init3DRenderers();
     this.bindGlobalEvents();
@@ -118,6 +126,66 @@ export class FableFlowApp {
       setTimeout(updatePortraitLockState, 120);
     });
     window.addEventListener('pointerdown', tryNativeLock, { once: true, passive: true });
+  }
+
+  // =========================================================================
+  // LANGUAGE (English / 简体中文)
+  // =========================================================================
+
+  t(key, params = null) {
+    return i18nT(key, params);
+  }
+
+  /** Translates built-in default titles only; user-typed titles are returned unchanged. */
+  displayTaskTitle(title) {
+    if (title === 'Example Task' || title === 'Focus Session') return this.t(title);
+    return title;
+  }
+
+  initLanguage() {
+    let lang = this.state && this.state.language;
+    if (lang !== 'en' && lang !== 'zh') {
+      try {
+        lang = localStorage.getItem('fable_flow_language');
+      } catch (_) {}
+    }
+    if (lang !== 'en' && lang !== 'zh') lang = 'en';
+    this.state.language = lang;
+    registerStaticI18n(document.getElementById('app-viewport'));
+    this.applyLanguage(lang, false);
+  }
+
+  applyLanguage(lang, rerender = true) {
+    const safe = lang === 'zh' ? 'zh' : 'en';
+    this.state.language = safe;
+    setLanguage(safe);
+    try {
+      localStorage.setItem('fable_flow_language', safe);
+    } catch (_) {}
+    applyStaticI18n();
+    if (this.els.profileLanguageStateLabel) {
+      this.els.profileLanguageStateLabel.textContent = safe === 'zh' ? '简体中文' : 'English';
+    }
+    if (this.els.profileAudioStateLabel && this.sensory) {
+      this.els.profileAudioStateLabel.textContent = this.t(this.sensory.isSilentMode ? 'Off' : 'On');
+    }
+    this.updateProfileAccountLabel();
+    if (typeof this.renderAuthModalState === 'function' && this.supabaseSync) {
+      this.renderAuthModalState();
+    }
+    if (rerender) {
+      this.renderAll();
+      if (this._isGuidedTourActive && typeof this._guidedTourStep === 'number') {
+        this.goToGuidedTourStep(this._guidedTourStep);
+      }
+    }
+  }
+
+  toggleLanguage() {
+    const next = getLanguage() === 'zh' ? 'en' : 'zh';
+    this.applyLanguage(next, true);
+    this.saveState();
+    this.showTelemetryToast(next === 'zh' ? '语言：简体中文' : 'Language: English');
   }
 
   getPointerXY(e) {
@@ -407,7 +475,7 @@ export class FableFlowApp {
     this._stackFlipDeg = 0;
     this.saveState();
     this.renderAll();
-    this.showNotificationBanner('Restored clean default state with Example Task.');
+    this.showNotificationBanner(this.t('Restored clean default state with Example Task.'));
   }
 
   reconcileElapsedTimers(stateObj) {
@@ -551,6 +619,8 @@ export class FableFlowApp {
       profileResetTimeSelect: document.getElementById('profile-reset-time-select'),
       profileToggleAudioBtn: document.getElementById('profile-toggle-audio-btn'),
       profileAudioStateLabel: document.getElementById('profile-audio-state-label'),
+      profileLanguageBtn: document.getElementById('profile-language-btn'),
+      profileLanguageStateLabel: document.getElementById('profile-language-state-label'),
       profileSimulate5amBtn: document.getElementById('profile-simulate-5am-btn'),
       profileModalClose: document.getElementById('profile-modal-close'),
 
@@ -721,14 +791,19 @@ export class FableFlowApp {
         this.saveState();
         this.renderAll();
         const padded = String(hourVal).padStart(2, '0') + ':00';
-        this.showTelemetryToast(`Daily reset time: ${padded}`);
+        this.showTelemetryToast(this.t('Daily reset time: {time}', { time: padded }));
+      });
+    }
+    if (this.els.profileLanguageBtn) {
+      this.els.profileLanguageBtn.addEventListener('click', () => {
+        this.toggleLanguage();
       });
     }
     if (this.els.profileToggleAudioBtn) {
       this.els.profileToggleAudioBtn.addEventListener('click', () => {
         this.toggleSilentAudioMode();
         if (this.els.profileAudioStateLabel) {
-          this.els.profileAudioStateLabel.textContent = this.sensory.isSilentMode ? 'Off' : 'On';
+          this.els.profileAudioStateLabel.textContent = this.t(this.sensory.isSilentMode ? 'Off' : 'On');
         }
       });
     }
@@ -781,7 +856,7 @@ export class FableFlowApp {
         const clamped = this.clampReflectionInputText(this.els.cardBackReflection.value);
         if (this.els.cardBackReflection.value !== clamped) {
           this.els.cardBackReflection.value = clamped;
-          this.showTelemetryToast('Reflection limit reached');
+          this.showTelemetryToast(this.t('Reflection limit reached'));
         }
         this.state.reflectionText = this.els.cardBackReflection.value;
         this.adjustReflectionTypography(this.els.cardBackReflection);
@@ -829,7 +904,7 @@ export class FableFlowApp {
               }
               this.saveState();
               this.renderStackScreen();
-              this.showTelemetryToast('Photo updated on archived card');
+              this.showTelemetryToast(this.t('Photo updated on archived card'));
             }
           } else {
             if (!Array.isArray(this.state.reflectionPhotos)) {
@@ -848,10 +923,10 @@ export class FableFlowApp {
             }
             this.saveState();
             this.renderCardScreen();
-            this.showTelemetryToast('Photo updated in Evening Journal');
+            this.showTelemetryToast(this.t('Photo updated in Evening Journal'));
           }
         } catch (_) {
-          this.showNotificationBanner('Could not process selected image file.');
+          this.showNotificationBanner(this.t('Could not process selected image file.'));
         } finally {
           this.els.journalPhotoFileInput.value = '';
         }
@@ -1005,7 +1080,7 @@ export class FableFlowApp {
       this.els.demoBtnSilent.classList.toggle('active-pill', this.sensory.isSilentMode);
     }
     this.showTelemetryToast(
-      this.sensory.isSilentMode ? 'Sound: Off' : 'Sound: On'
+      this.t(this.sensory.isSilentMode ? 'Sound: Off' : 'Sound: On')
     );
   }
 
@@ -1013,7 +1088,7 @@ export class FableFlowApp {
     if (!this.els.profileModalOverlay) return;
     this.updateProfileAccountLabel();
     if (this.els.profileAudioStateLabel) {
-      this.els.profileAudioStateLabel.textContent = this.sensory.isSilentMode ? 'Off' : 'On';
+      this.els.profileAudioStateLabel.textContent = this.t(this.sensory.isSilentMode ? 'Off' : 'On');
     }
     if (this.els.profileResetTimeSelect) {
       const hr = typeof this.state.dailyResetHour === 'number' ? this.state.dailyResetHour : 5;
@@ -1029,7 +1104,7 @@ export class FableFlowApp {
       const shortHandle = user.email.split('@')[0].slice(0, 12);
       this.els.profileAccountStateLabel.textContent = `${shortHandle} ✓`;
     } else {
-      this.els.profileAccountStateLabel.textContent = 'Sign In ↗';
+      this.els.profileAccountStateLabel.textContent = this.t('Sign In ↗');
     }
   }
 
@@ -1080,7 +1155,7 @@ export class FableFlowApp {
       this.els.authSyncNowBtn.addEventListener('click', async () => {
         await this.supabaseSync.pushCloudState(this.state);
         this.renderAuthModalState();
-        this.showTelemetryToast('Synced to account');
+        this.showTelemetryToast(this.t('Synced to account'));
       });
     }
     if (this.els.authSignoutBtn) {
@@ -1104,8 +1179,8 @@ export class FableFlowApp {
         this.renderAuthModalState();
         this.showTelemetryToast(
           this.supabaseSync.isCloudConfigured()
-            ? 'Supabase Cloud connected'
-            : 'Saved local vault mode'
+            ? this.t('Supabase Cloud connected')
+            : this.t('Saved local vault mode')
         );
       });
     }
@@ -1166,7 +1241,7 @@ export class FableFlowApp {
         this.els.authTabSignup.setAttribute('aria-selected', isSignup ? 'true' : 'false');
       }
       if (this.els.authSubmitBtn) {
-        this.els.authSubmitBtn.textContent = isSignup ? 'Create Account' : 'Sign In';
+        this.els.authSubmitBtn.textContent = this.t(isSignup ? 'Create Account' : 'Sign In');
       }
     } else if (user) {
       if (this.els.authUserEmailDisplay) {
@@ -1174,11 +1249,11 @@ export class FableFlowApp {
       }
       if (this.els.authSyncModeBadge) {
         this.els.authSyncModeBadge.textContent = this.supabaseSync.isCloudConfigured()
-          ? 'Supabase Cloud'
-          : 'Synced';
+          ? this.t('Supabase Cloud')
+          : this.t('Synced');
       }
       if (this.els.authLastSyncedLabel) {
-        this.els.authLastSyncedLabel.textContent = 'Up to date';
+        this.els.authLastSyncedLabel.textContent = this.t('Up to date');
       }
     }
     this.updateProfileAccountLabel();
@@ -1195,17 +1270,17 @@ export class FableFlowApp {
         if (this.els.authPasswordInput) this.els.authPasswordInput.value = '';
         this.renderAuthModalState();
         this.closeAuthModal();
-        this.showTelemetryToast(`Account created: ${user.email}`);
+        this.showTelemetryToast(this.t('Account created: {email}', { email: user.email }));
       } else {
         const { user } = await this.supabaseSync.signIn(email, password);
         if (this.els.authPasswordInput) this.els.authPasswordInput.value = '';
         await this.syncFromAuthenticatedAccount(true);
         this.renderAuthModalState();
         this.closeAuthModal();
-        this.showTelemetryToast(`Signed in as ${user.email}`);
+        this.showTelemetryToast(this.t('Signed in as {email}', { email: user.email }));
       }
     } catch (err) {
-      this.showAuthError(err && err.message ? err.message : 'Authentication failed');
+      this.showAuthError(err && err.message ? this.t(err.message) : this.t('Authentication failed'));
     }
   }
 
@@ -1224,10 +1299,10 @@ export class FableFlowApp {
       this.closeAuthModal();
       const user = this.supabaseSync.getCurrentUser();
       if (user) {
-        this.showTelemetryToast(`Signed in as ${user.email}`);
+        this.showTelemetryToast(this.t('Signed in as {email}', { email: user.email }));
       }
     } catch (err) {
-      this.showAuthError(err && err.message ? err.message : 'Sign-in failed');
+      this.showAuthError(err && err.message ? this.t(err.message) : this.t('Sign-in failed'));
     }
   }
 
@@ -1239,6 +1314,7 @@ export class FableFlowApp {
     const fresh = this.getDefaultState();
     fresh.hasCompletedOnboarding = true;
     fresh.isSilentMode = this.sensory.isSilentMode;
+    fresh.language = getLanguage();
     this.state = fresh;
     this._todayFlipDeg = 0;
     this._stackFlipDeg = 0;
@@ -1248,7 +1324,7 @@ export class FableFlowApp {
     this.renderAuthModalState();
     this.closeAuthModal();
     this.renderAll();
-    this.showTelemetryToast('Signed out');
+    this.showTelemetryToast(this.t('Signed out'));
   }
 
   async syncFromAuthenticatedAccount(renderImmediately = true) {
@@ -1271,7 +1347,16 @@ export class FableFlowApp {
       cloudState.hasCompletedOnboarding = true;
       cloudState.activePillar = prevPillar;
       this.reconcileElapsedTimers(cloudState);
+      if (cloudState.language !== 'en' && cloudState.language !== 'zh') {
+        cloudState.language = getLanguage();
+      }
       this.state = cloudState;
+      setLanguage(cloudState.language);
+      applyStaticI18n();
+      if (this.els.profileLanguageStateLabel) {
+        this.els.profileLanguageStateLabel.textContent =
+          cloudState.language === 'zh' ? '简体中文' : 'English';
+      }
       this.sensory.isSilentMode = Boolean(this.state.isSilentMode);
       this._todayFlipDeg = this.state.isCardFlipped ? -180 : 0;
       this._stackFlipDeg = this.state.isStackCardFlipped ? -180 : 0;
@@ -1383,7 +1468,9 @@ export class FableFlowApp {
     this.saveState();
     this.renderAll();
     this.showNotificationBanner(
-      `5:00 AM Rollover: Archived ${currentKey} to Stack & created fresh card for ${nextMeta.shortMonth} ${nextDayPadded}.`
+      getLanguage() === 'zh'
+        ? this.t('New day: yesterday’s card moved to your stack')
+        : `5:00 AM Rollover: Archived ${currentKey} to Stack & created fresh card for ${nextMeta.shortMonth} ${nextDayPadded}.`
     );
   }
 
@@ -1802,7 +1889,11 @@ export class FableFlowApp {
     this.sensory.playCardFlipSwoosh();
     this.saveState();
     this.renderAll();
-    this.showTelemetryToast(`Card added for ${meta.shortMonth} ${String(meta.dayNum).padStart(2, '0')}`);
+    this.showTelemetryToast(
+      this.t('Card added for {date}', {
+        date: `${meta.shortMonth} ${String(meta.dayNum).padStart(2, '0')}`,
+      })
+    );
   }
 
   toggleStackEditMode() {
@@ -2688,16 +2779,16 @@ export class FableFlowApp {
   confirmPermanentDeleteArchivedCard() {
     const card = this.getSelectedStackCard();
     if (!card) {
-      this.showNotificationBanner('No archived card remaining to delete.');
+      this.showNotificationBanner(this.t('No archived card remaining to delete.'));
       return;
     }
 
     if (this.els.deleteModalTitle) {
-      this.els.deleteModalTitle.textContent = `Permanently delete ${card.shortDate} card?`;
+      this.els.deleteModalTitle.textContent = this.t('Permanently delete {date} card?', { date: card.shortDate });
     }
     if (this.els.deleteModalDesc) {
       this.els.deleteModalDesc.textContent =
-        'This action cannot be undone. This archived card and its reflection will be permanently removed from your stack.';
+        this.t('This action cannot be undone. This archived card and its reflection will be permanently removed from your stack.');
     }
 
     this.els.deleteModalOverlay.classList.remove('hidden');
@@ -2721,7 +2812,7 @@ export class FableFlowApp {
       this.sensory.playTrashDelete();
       this.saveState();
       this.renderAll();
-      this.showNotificationBanner('Card permanently deleted');
+      this.showNotificationBanner(this.t('Card permanently deleted'));
     };
     const cleanup = () => {
       this.els.deleteModalCancel.removeEventListener('click', onCancel);
@@ -2771,7 +2862,7 @@ export class FableFlowApp {
       if (slot.mode === 'stopwatch') {
         if (!warnedStopwatchDrag && Math.abs(translationX) > 6) {
           warnedStopwatchDrag = true;
-          this.showTelemetryToast('Switch to Countdown to set duration');
+          this.showTelemetryToast(this.t('Switch to Countdown to set duration'));
         }
         return;
       }
@@ -2877,7 +2968,7 @@ export class FableFlowApp {
       const rawVal = this.els.heroTimeInput.value;
       if (this.els.heroTimeUnitBadge) {
         this.els.heroTimeUnitBadge.textContent =
-          rawVal.includes(':') || rawVal.includes('：') ? 'HH:MM' : 'MIN';
+          this.t(rawVal.includes(':') || rawVal.includes('：') ? 'HH:MM' : 'MIN');
       }
       const parsedMins = OdometerDialPhysics.parseTypedTimeInput(rawVal);
       if (parsedMins !== null && this.hero3D) {
@@ -2945,7 +3036,7 @@ export class FableFlowApp {
     if (!slot || !this.els.heroTimeEditor || !this.els.heroTimeInput) return;
 
     if (slot.mode === 'stopwatch') {
-      this.showTelemetryToast('Switch to Countdown to set duration');
+      this.showTelemetryToast(this.t('Switch to Countdown to set duration'));
       return;
     }
 
@@ -2954,7 +3045,7 @@ export class FableFlowApp {
     this.els.heroTimeEditor.classList.remove('hidden');
     this.els.heroTimeInput.value = String(currentMinutes);
     if (this.els.heroTimeUnitBadge) {
-      this.els.heroTimeUnitBadge.textContent = 'MIN';
+      this.els.heroTimeUnitBadge.textContent = this.t('MIN');
     }
 
     setTimeout(() => {
@@ -3009,7 +3100,7 @@ export class FableFlowApp {
     }
 
     this.sensory.playDialRatchetNotch(true);
-    this.showTelemetryToast(`Timer set to ${clampedMins} min`);
+    this.showTelemetryToast(this.t('Timer set to {n} min', { n: clampedMins }));
     this.saveState();
     this.renderAll();
   }
@@ -3085,7 +3176,9 @@ export class FableFlowApp {
               anyCompletedTransition = true;
               this.endTimerToSilver(slot.quadrant, true);
               this.showNotificationBanner(
-                `Timer completed: ${(slot.customTitle || 'Timer').toUpperCase()}`
+                this.t('Timer completed: {title}', {
+                  title: this.displayTaskTitle(slot.customTitle || this.t('Timer')).toUpperCase(),
+                })
               );
             }
           }
@@ -3203,7 +3296,7 @@ export class FableFlowApp {
 
     this.sensory.playCompletionChime();
     if (!completedNaturally) {
-      this.showTelemetryToast('Timer ended');
+      this.showTelemetryToast(this.t('Timer ended'));
     }
 
     this.saveState();
@@ -3223,7 +3316,7 @@ export class FableFlowApp {
     slot.lastTickTimestamp = null;
 
     this.sensory.playDialRatchetNotch(false);
-    this.showTelemetryToast('Tomato reset to 00:00');
+    this.showTelemetryToast(this.t('Tomato reset to 00:00'));
 
     this.saveState();
     this.renderAll();
@@ -3244,13 +3337,13 @@ export class FableFlowApp {
       slot.mode = 'stopwatch';
       slot.remainingSeconds = 0;
       slot.angleDegrees = 0;
-      this.showTelemetryToast('Stopwatch mode');
+      this.showTelemetryToast(this.t('Stopwatch mode'));
     } else {
       slot.mode = 'countdown';
       slot.configuredMinutes = 25;
       slot.remainingSeconds = 25 * 60;
       slot.angleDegrees = 25 * 6.0;
-      this.showTelemetryToast('Countdown mode');
+      this.showTelemetryToast(this.t('Countdown mode'));
     }
     this.sensory.playDialRatchetNotch(true);
     this.saveState();
@@ -3340,7 +3433,7 @@ export class FableFlowApp {
     this.state.openDropdownQuadrant = null;
     this.state.isHeroDropdownOpen = false;
     this.sensory.playDialRatchetNotch(false);
-    this.showTelemetryToast('Tomato unassigned');
+    this.showTelemetryToast(this.t('Tomato unassigned'));
     this.saveState();
     this.renderAll();
   }
@@ -3529,7 +3622,7 @@ export class FableFlowApp {
       const titleSpan = document.createElement('span');
       titleSpan.className = 'task-title';
       titleSpan.style.fontSize = `${fontSizePx}px`;
-      titleSpan.textContent = task.title;
+      titleSpan.textContent = this.displayTaskTitle(task.title);
       titleWrap.appendChild(titleSpan);
 
       const strikeCanvas = document.createElement('canvas');
@@ -3543,8 +3636,8 @@ export class FableFlowApp {
       const isLit =
         task.assignedQuadrant !== null && task.assignedQuadrant !== undefined;
       tomatoBtn.title = isLit
-        ? 'Click lit-up tomato to unassign (return to grey)'
-        : 'Click grey tomato to light up and open Timer page';
+        ? this.t('Click lit-up tomato to unassign (return to grey)')
+        : this.t('Click grey tomato to light up and open Timer page');
 
       const miniImg = document.createElement('img');
       miniImg.className = 'task-mini-tomato-img';
@@ -3555,7 +3648,7 @@ export class FableFlowApp {
         ? 'completed'
         : task.assignedQuadrant;
       miniImg.src = this.gridRenderer.getMiniDataURL(miniPaletteKey);
-      miniImg.alt = isLit ? 'Assigned Tomato' : 'Unassigned Grey Tomato';
+      miniImg.alt = isLit ? this.t('Assigned Tomato') : this.t('Unassigned Grey Tomato');
       tomatoBtn.appendChild(miniImg);
 
       tomatoBtn.addEventListener('click', (e) => {
@@ -3632,10 +3725,10 @@ export class FableFlowApp {
     if (photos.length === 0) {
       const addSlot = document.createElement('div');
       addSlot.className = 'journal-photo-slot';
-      addSlot.title = 'Click to attach a photo';
+      addSlot.title = this.t('Click to attach a photo');
       const label = document.createElement('span');
       label.className = 'journal-photo-add-label';
-      label.textContent = '+ Attach Photo (up to 2)';
+      label.textContent = this.t('+ Attach Photo (up to 2)');
       addSlot.appendChild(label);
       addSlot.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3650,8 +3743,8 @@ export class FableFlowApp {
       const slot = document.createElement('div');
       slot.className = 'journal-photo-slot';
       slot.title = isStackViewMode
-        ? 'Tap photo to view in detail'
-        : 'Tap photo to view in detail, or tap × to remove';
+        ? this.t('Tap photo to view in detail')
+        : this.t('Tap photo to view in detail, or tap × to remove');
 
       const img = document.createElement('img');
       img.className = 'journal-photo-img';
@@ -3697,7 +3790,7 @@ export class FableFlowApp {
           const addSecondPill = document.createElement('button');
           addSecondPill.type = 'button';
           addSecondPill.className = 'journal-photo-add-second-pill';
-          addSecondPill.textContent = '+ 2nd Photo';
+          addSecondPill.textContent = this.t('+ 2nd Photo');
           addSecondPill.addEventListener('click', (e) => {
             e.stopPropagation();
             if (this._justFinishedCardSwipe) return;
@@ -3713,10 +3806,10 @@ export class FableFlowApp {
     if (photos.length === 1 && targetType === 'stack' && this.state.isStackEditMode) {
       const secondSlot = document.createElement('div');
       secondSlot.className = 'journal-photo-slot';
-      secondSlot.title = 'Click to attach a second photo';
+      secondSlot.title = this.t('Click to attach a second photo');
       const label = document.createElement('span');
       label.className = 'journal-photo-add-label';
-      label.textContent = '+ Add 2nd Photo';
+      label.textContent = this.t('+ Add 2nd Photo');
       secondSlot.appendChild(label);
       secondSlot.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3754,7 +3847,7 @@ export class FableFlowApp {
         monthBtn = document.createElement('button');
         monthBtn.type = 'button';
         monthBtn.className = 'stack-month-label';
-        monthBtn.title = 'Tap to jump between months';
+        monthBtn.title = this.t('Tap to jump between months');
         monthBtn.addEventListener('click', () => {
           const curM = this.formatDateMetadataForKey(
             this.state.selectedStackDateKey || this.getOffsetDateKey(todayKey, -1)
@@ -3842,8 +3935,8 @@ export class FableFlowApp {
         const dPadded = String(meta.dayNum).padStart(2, '0');
         emptySlotBtn.innerHTML = `
           <span class="stack-retro-plus-icon">+</span>
-          <span class="stack-retro-slot-title">+ Add Card for ${meta.shortMonth} ${dPadded}</span>
-          <span class="stack-retro-slot-sub">Add daily to-dos &amp; reflection retrospectively</span>
+          <span class="stack-retro-slot-title">${this.t('+ Add Card for {date}', { date: `${meta.shortMonth} ${dPadded}` })}</span>
+          <span class="stack-retro-slot-sub">${this.t('Add daily to-dos & reflection retrospectively').replace(/&/g, '&amp;')}</span>
         `;
         emptySlotBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -3868,12 +3961,12 @@ export class FableFlowApp {
     const isEditing = Boolean(this.state.isStackEditMode);
     if (this.els.stackFrontEditBtn) {
       this.els.stackFrontEditBtn.classList.remove('hidden');
-      this.els.stackFrontEditBtn.textContent = isEditing ? 'Done' : 'Edit';
+      this.els.stackFrontEditBtn.textContent = this.t(isEditing ? 'Done' : 'Edit');
       this.els.stackFrontEditBtn.classList.toggle('is-editing', isEditing);
     }
     if (this.els.stackBackEditBtn) {
       this.els.stackBackEditBtn.classList.remove('hidden');
-      this.els.stackBackEditBtn.textContent = isEditing ? 'Done' : 'Edit';
+      this.els.stackBackEditBtn.textContent = this.t(isEditing ? 'Done' : 'Edit');
       this.els.stackBackEditBtn.classList.toggle('is-editing', isEditing);
     }
 
@@ -3922,7 +4015,7 @@ export class FableFlowApp {
       const titleSpan = document.createElement('span');
       titleSpan.className = 'task-title';
       titleSpan.style.fontSize = `${fontSizePx}px`;
-      titleSpan.textContent = task.title;
+      titleSpan.textContent = this.displayTaskTitle(task.title);
       titleWrap.appendChild(titleSpan);
 
       const strikeCanvas = document.createElement('canvas');
@@ -3965,7 +4058,7 @@ export class FableFlowApp {
       }
       this.els.stackCardBackReflection.readOnly = !isEditing;
       this.els.stackCardBackReflection.placeholder = isEditing
-        ? 'Write or update your reflection for this day...'
+        ? this.t('Write or update your reflection for this day...')
         : '';
       const hasPhotos =
         Array.isArray(selectedCard.reflectionPhotos) &&
@@ -4104,7 +4197,7 @@ export class FableFlowApp {
             this.saveState();
             this.renderAll();
           } else if (isFutureDate) {
-            this.showTelemetryToast('Future date');
+            this.showTelemetryToast(this.t('Future date'));
           } else {
             this.sensory.playStackRiffleTick();
             this.zoomInCalendarToStack(dateKey);
@@ -4412,7 +4505,7 @@ export class FableFlowApp {
         slot.remainingSeconds
       );
       const shortTitleText = OdometerDialPhysics.formatShortTomatoTitle(
-        slot.customTitle || '',
+        this.displayTaskTitle(slot.customTitle || ''),
         2,
         13
       );
@@ -4466,11 +4559,11 @@ export class FableFlowApp {
       overlay.className = 'grid-tomato-overlay';
 
       if (isAssigned) {
-        tomatoWrap.title = 'Tap tomato body to open Hero Timer; tap title text to edit/reassign';
+        tomatoWrap.title = this.t('Tap tomato body to open Hero Timer; tap title text to edit/reassign');
 
         const titleEl = document.createElement('div');
         titleEl.className = 'grid-tomato-title';
-        titleEl.title = 'Tap title to edit or reassign task';
+        titleEl.title = this.t('Tap title to edit or reassign task');
         titleEl.textContent = shortTitleText;
         titleEl.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -4496,11 +4589,11 @@ export class FableFlowApp {
           this.renderAll();
         });
       } else {
-        tomatoWrap.title = 'Tap to assign a task to this tomato';
+        tomatoWrap.title = this.t('Tap to assign a task to this tomato');
         if (!isDropdownOpen) {
           const tapLabel = document.createElement('div');
           tapLabel.className = 'grid-tap-to-assign';
-          tapLabel.textContent = 'Tap to assign';
+          tapLabel.textContent = this.t('Tap to assign');
           overlay.appendChild(tapLabel);
         }
 
@@ -4530,7 +4623,7 @@ export class FableFlowApp {
         playPauseBtn.className = 'grid-ctrl-btn';
         playPauseBtn.setAttribute(
           'aria-label',
-          slot.runState === 'running' ? 'Pause Timer' : 'Start Timer'
+          slot.runState === 'running' ? this.t('Pause Timer') : this.t('Start Timer')
         );
         playPauseBtn.innerHTML =
           slot.runState === 'running'
@@ -4546,11 +4639,11 @@ export class FableFlowApp {
         stopBtn.className = 'grid-ctrl-btn';
         stopBtn.setAttribute(
           'aria-label',
-          isCompleted ? 'Reset Timer to 00:00' : 'End Timer (Turn Silver Metallic)'
+          isCompleted ? this.t('Reset Timer to 00:00') : this.t('End Timer (Turn Silver Metallic)')
         );
         stopBtn.title = isCompleted
-          ? 'Reset Tomato Timer to 00:00'
-          : 'End Timer (Turns tomato Silver Metallic without clearing)';
+          ? this.t('Reset Tomato Timer to 00:00')
+          : this.t('End Timer (Turns tomato Silver Metallic without clearing)');
         stopBtn.innerHTML = isCompleted
           ? `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M4.8 9.8C6.2 6.1 9.8 3.6 13.8 3.6C18.9 3.6 22.4 7.8 22.4 12.6C22.4 17.6 18.4 21.4 13.5 21.4C9.5 21.4 6.1 18.9 4.9 15.3" stroke="#0F0F0F" stroke-width="2.3" stroke-linecap="round"/><path d="M3.5 4.5V10.3H9.3" stroke="#0F0F0F" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`
           : `<svg width="20" height="20" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.5" fill="#0F0F0F"/></svg>`;
@@ -4580,7 +4673,7 @@ export class FableFlowApp {
     const customBtn = document.createElement('button');
     customBtn.type = 'button';
     customBtn.className = 'dropdown-custom-header';
-    const headerLabel = hasExistingTitle ? '✎ Edit Title...' : '+ Custom Title...';
+    const headerLabel = this.t(hasExistingTitle ? '✎ Edit Title...' : '+ Custom Title...');
     customBtn.innerHTML = `
       <span>${headerLabel}</span>
       <svg width="14" height="9" viewBox="0 0 14 9" fill="none">
@@ -4603,7 +4696,7 @@ export class FableFlowApp {
       const itemBtn = document.createElement('button');
       itemBtn.type = 'button';
       itemBtn.className = 'dropdown-task-item';
-      itemBtn.textContent = t.title;
+      itemBtn.textContent = this.displayTaskTitle(t.title);
       itemBtn.addEventListener('click', () => {
         this.assignTaskToQuadrant(quadrant, t);
       });
@@ -4615,7 +4708,7 @@ export class FableFlowApp {
       unassignBtn.type = 'button';
       unassignBtn.className = 'dropdown-task-item';
       unassignBtn.style.color = '#8B1E24';
-      unassignBtn.textContent = '✕ Unassign Tomato';
+      unassignBtn.textContent = this.t('✕ Unassign Tomato');
       unassignBtn.addEventListener('click', () => {
         this.clearQuadrantAssignment(quadrant);
       });
@@ -4644,14 +4737,14 @@ export class FableFlowApp {
         '0'
       );
       const shortTitle = OdometerDialPhysics.formatShortTomatoTitle(
-        slot.customTitle || 'EXAMPLE TASK',
+        this.displayTaskTitle(slot.customTitle || '') || this.t('EXAMPLE TASK'),
         4,
         22
       );
       this.els.heroSubtitle.textContent = `${orderStr} / ${shortTitle}`;
     } else {
       const orderStr = String(slot.quadrant + 1).padStart(2, '0');
-      this.els.heroSubtitle.textContent = `${orderStr} / TAP TO ASSIGN`;
+      this.els.heroSubtitle.textContent = `${orderStr} / ${this.t('TAP TO ASSIGN')}`;
     }
 
     if (this.els.heroSubtitleDropdownMount) {
@@ -4684,11 +4777,11 @@ export class FableFlowApp {
       this.els.heroBtnStop.classList.toggle('hidden', !isSet);
       this.els.heroBtnStop.setAttribute(
         'aria-label',
-        isCompleted ? 'Reset Timer to 00:00' : 'End Timer (Turn Silver Metallic)'
+        isCompleted ? this.t('Reset Timer to 00:00') : this.t('End Timer (Turn Silver Metallic)')
       );
       this.els.heroBtnStop.title = isCompleted
-        ? 'Reset Tomato Timer to 00:00'
-        : 'End Timer (Turns tomato Silver Metallic without clearing)';
+        ? this.t('Reset Tomato Timer to 00:00')
+        : this.t('End Timer (Turns tomato Silver Metallic without clearing)');
       this.els.heroBtnStop.innerHTML = isCompleted
         ? `<svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M7.5 14.5C9.5 9.2 14.6 5.5 20.5 5.5C28.2 5.5 33.5 11.8 33.5 18.8C33.5 26.2 27.6 31.8 20.2 31.8C14.2 31.8 9.2 28.1 7.4 22.8" stroke="#0F0F0F" stroke-width="3.0" stroke-linecap="round"/><path d="M5.5 6.8V15.2H13.9" stroke="#0F0F0F" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/></svg>`
         : `<svg width="36" height="36" viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" rx="4.5" fill="#0F0F0F"/></svg>`;
@@ -4711,7 +4804,7 @@ export class FableFlowApp {
 
     const tasksArr = isStackCard ? card.tasks : this.state.tasks;
     if (tasksArr.length >= 6) {
-      this.showNotificationBanner('Maximum 6 tasks per card reached.');
+      this.showNotificationBanner(this.t('Maximum 6 tasks per card reached.'));
       return;
     }
 
@@ -4743,8 +4836,8 @@ export class FableFlowApp {
     const input = document.createElement('textarea');
     input.rows = 1;
     input.className = 'task-inline-input';
-    input.placeholder = 'Type item...';
-    input.setAttribute('aria-label', 'Type task directly on card');
+    input.placeholder = this.t('Type item...');
+    input.setAttribute('aria-label', this.t('Type task directly on card'));
 
     const syncHeight = (collapseFirst = true) => {
       if (collapseFirst) {
@@ -4912,7 +5005,7 @@ export class FableFlowApp {
     input.rows = 1;
     input.className = 'task-inline-input';
     input.value = task.title || '';
-    input.setAttribute('aria-label', 'Edit task directly on card');
+    input.setAttribute('aria-label', this.t('Edit task directly on card'));
 
     const syncEditHeight = (collapseFirst = true) => {
       if (collapseFirst) {
@@ -4926,8 +5019,8 @@ export class FableFlowApp {
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'task-inline-delete-btn';
-    delBtn.title = 'Delete item';
-    delBtn.setAttribute('aria-label', 'Delete item');
+    delBtn.title = this.t('Delete item');
+    delBtn.setAttribute('aria-label', this.t('Delete item'));
     delBtn.textContent = '×';
 
     titleWrap.appendChild(input);
@@ -5104,11 +5197,11 @@ export class FableFlowApp {
 
   openAddTaskModal() {
     if (this.state.tasks.length >= 6) {
-      this.showNotificationBanner('Maximum 6 tasks per Daily Card reached.');
+      this.showNotificationBanner(this.t('Maximum 6 tasks per Daily Card reached.'));
       return;
     }
     this.openInputModal(
-      'Add Task',
+      this.t('Add Task'),
       '',
       (val) => {
         const cleanVal = this.clampTaskInputText(val).trim();
@@ -5135,11 +5228,11 @@ export class FableFlowApp {
     if (!card) return;
     if (!Array.isArray(card.tasks)) card.tasks = [];
     if (card.tasks.length >= 6) {
-      this.showNotificationBanner('Maximum 6 tasks per Daily Card reached.');
+      this.showNotificationBanner(this.t('Maximum 6 tasks per Daily Card reached.'));
       return;
     }
     this.openInputModal(
-      `Add Task to ${card.shortDate}`,
+      this.t('Add Task to {date}', { date: card.shortDate }),
       '',
       (val) => {
         const cleanVal = this.clampTaskInputText(val).trim();
@@ -5163,7 +5256,10 @@ export class FableFlowApp {
     const card = this.getSelectedStackCard();
     if (!card) return;
     this.openInputModal(
-      `Edit ${card.shortDate} Task ${String(task.orderIndex).padStart(2, '0')}`,
+      this.t('Edit {date} Task {n}', {
+        date: card.shortDate,
+        n: String(task.orderIndex).padStart(2, '0'),
+      }),
       task.title,
       (val) => {
         const cleanVal = this.clampTaskInputText(val).trim();
@@ -5174,7 +5270,7 @@ export class FableFlowApp {
           });
           this.saveState();
           this.renderStackScreen();
-          this.showNotificationBanner('Task removed from archived card');
+          this.showNotificationBanner(this.t('Task removed from archived card'));
           return;
         }
         task.title = cleanVal;
@@ -5188,7 +5284,7 @@ export class FableFlowApp {
         });
         this.saveState();
         this.renderStackScreen();
-        this.showNotificationBanner('Task removed from archived card');
+        this.showNotificationBanner(this.t('Task removed from archived card'));
       },
       true
     );
@@ -5196,7 +5292,7 @@ export class FableFlowApp {
 
   openEditTaskModal(task) {
     this.openInputModal(
-      `Edit Task ${String(task.orderIndex).padStart(2, '0')}`,
+      this.t('Edit Task {n}', { n: String(task.orderIndex).padStart(2, '0') }),
       task.title,
       (val) => {
         const cleanVal = this.clampTaskInputText(val).trim();
@@ -5222,11 +5318,11 @@ export class FableFlowApp {
 
   confirmPermanentDeleteTask(task) {
     if (this.els.deleteModalTitle) {
-      this.els.deleteModalTitle.textContent = 'Permanently delete this item?';
+      this.els.deleteModalTitle.textContent = this.t('Permanently delete this item?');
     }
     if (this.els.deleteModalDesc) {
       this.els.deleteModalDesc.textContent =
-        'This action cannot be undone. The item will be permanently removed from Today’s Card.';
+        this.t('This action cannot be undone. The item will be permanently removed from Today’s Card.');
     }
     this.els.deleteModalOverlay.classList.remove('hidden');
     const onCancel = () => {
@@ -5259,7 +5355,7 @@ export class FableFlowApp {
       }
       this.saveState();
       this.renderAll();
-      this.showNotificationBanner('Task deleted');
+      this.showNotificationBanner(this.t('Task deleted'));
     };
     const cleanup = () => {
       this.els.deleteModalCancel.removeEventListener('click', onCancel);
@@ -5274,7 +5370,7 @@ export class FableFlowApp {
     const current = slot?.customTitle || '';
     const isEditingExisting = Boolean(slot && (slot.assignedTaskId || slot.customTitle));
     this.openInputModal(
-      isEditingExisting ? 'Edit Timer Title' : 'Assign Custom Timer Title',
+      isEditingExisting ? this.t('Edit Timer Title') : this.t('Assign Custom Timer Title'),
       current,
       (val) => {
         const cleanVal = this.clampTaskInputText(val).trim();
@@ -5543,7 +5639,7 @@ export class FableFlowApp {
       // STEP 2: FRONT OF CARD (DAILY TO-DOS)
       {
         title: 'Front Page · Daily To-Dos',
-        desc: 'Add up to 6 tasks, swipe text to cross out',
+        desc: 'Add up to 6 tasks. Swipe to cross out, swipe again to undo',
         applyPage: () => {
           this.restoreTourDemoArchiveCards();
           this.state.activePillar = 'card';
@@ -5563,7 +5659,9 @@ export class FableFlowApp {
           const box = this.getElementBoxInTourOverlay(titleEl);
           if (!box) return;
 
-          const period = 2100;
+          // Two swipes per loop: 1st swipe crosses the task out, 2nd swipe (same
+          // left -> right motion) erases the pencil line to uncross it.
+          const period = 4600;
           const t = (elapsedMs % period) / period;
           const startX = box.left + 4;
           const endX = box.left + Math.max(76, box.width + 8);
@@ -5572,34 +5670,57 @@ export class FableFlowApp {
           let dotX = startX;
           let opacity = 0;
           let scale = 1;
-          let strokeProg = 0;
+          let strokeFrom = 0;
+          let strokeTo = 0;
 
-          if (t < 0.15) {
-            const p = t / 0.15;
+          if (t < 0.07) {
+            // Dot appears at the start of the text
+            const p = t / 0.07;
             opacity = p;
             scale = 1.06 - 0.12 * p;
-            dotX = startX;
-            strokeProg = 0;
-          } else if (t < 0.72) {
-            const p = this.easeInOutCubic((t - 0.15) / 0.57);
+          } else if (t < 0.35) {
+            // Swipe 1: cross out
+            const p = this.easeInOutCubic((t - 0.07) / 0.28);
             opacity = 1;
             scale = 0.94;
             dotX = startX + p * (endX - startX);
-            strokeProg = p;
-          } else if (t < 0.90) {
-            const p = (t - 0.72) / 0.18;
-            opacity = 1 - p * 0.92;
+            strokeTo = p;
+          } else if (t < 0.45) {
+            // Lift finger; task stays crossed out
+            const p = (t - 0.35) / 0.1;
+            opacity = 1 - p;
             scale = 0.94 + 0.08 * p;
             dotX = endX;
-            strokeProg = 1.0;
+            strokeTo = 1;
+          } else if (t < 0.52) {
+            // Dot comes back to the start, line still drawn
+            const p = (t - 0.45) / 0.07;
+            opacity = p;
+            scale = 1.06 - 0.12 * p;
+            strokeTo = 1;
+          } else if (t < 0.8) {
+            // Swipe 2: erase the pencil line (uncross)
+            const p = this.easeInOutCubic((t - 0.52) / 0.28);
+            opacity = 1;
+            scale = 0.94;
+            dotX = startX + p * (endX - startX);
+            strokeFrom = p;
+            strokeTo = 1;
+          } else if (t < 0.9) {
+            const p = (t - 0.8) / 0.1;
+            opacity = 1 - p;
+            scale = 0.94 + 0.08 * p;
+            dotX = endX;
           } else {
-            opacity = 0.06;
-            dotX = startX;
-            strokeProg = 0;
+            opacity = 0;
           }
 
           if (canvas) {
-            this.drawGraphiteStroke(canvas, 0.0, strokeProg);
+            if (strokeTo > 0 && strokeFrom < 1) {
+              this.drawGraphiteStroke(canvas, strokeFrom, strokeTo);
+            } else {
+              this.drawGraphiteStroke(canvas, 0.0, 0.0);
+            }
           }
           this.setTourDotState(this.els.tourPageDot, dotX, centerY, opacity, scale, false);
           this.setTourDotState(this.els.tourPageDot2, null, null, 0);
@@ -5727,7 +5848,7 @@ export class FableFlowApp {
         },
         animateFrame: (elapsedMs) => {
           if (this.els.heroSubtitle) {
-            this.els.heroSubtitle.textContent = '01 / EXAMPLE TASK';
+            this.els.heroSubtitle.textContent = `01 / ${this.t('EXAMPLE TASK')}`;
           }
           const box = this.getElementBoxInTourOverlay(this.els.heroTomatoStage);
           if (!box) return;
@@ -6109,17 +6230,17 @@ export class FableFlowApp {
     this.renderAll();
 
     if (this.els.tourStepTitle) {
-      this.els.tourStepTitle.textContent = step.title;
+      this.els.tourStepTitle.textContent = this.t(step.title);
     }
     if (this.els.tourStepDesc) {
-      this.els.tourStepDesc.textContent = step.desc;
+      this.els.tourStepDesc.textContent = this.t(step.desc);
     }
     if (this.els.tourPrevBtn) {
       this.els.tourPrevBtn.disabled = clampedIdx === 0;
     }
     if (this.els.tourNextBtn) {
       this.els.tourNextBtn.textContent =
-        clampedIdx === steps.length - 1 ? 'Done' : 'Next';
+        this.t(clampedIdx === steps.length - 1 ? 'Done' : 'Next');
     }
 
     const stepStartTime = performance.now();
