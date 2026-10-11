@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v44zh';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v44zh';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v44zh';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v44zh';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v44zh';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v45';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v45';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v45';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v45';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v45';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v44zh';
+} from './i18n.js?v=20261011_v45';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -3949,6 +3949,12 @@ export class FableFlowApp {
       this._stackFlipDeg = 0;
       this.applyCard3DRotation(this.els.stackCard3D, false, 0);
       if (this.els.stackBtnFlip) this.els.stackBtnFlip.classList.add('hidden');
+      if (this.els.stackBtnFlip && this.els.stackBtnFlip.parentElement) {
+        this.els.stackBtnFlip.parentElement.classList.add('two-buttons');
+      }
+      document
+        .querySelectorAll('.card-face-flip-btn[data-flip-target="stack"]')
+        .forEach((b) => b.classList.add('hidden'));
       if (this.els.stackBtnTrash) this.els.stackBtnTrash.classList.add('hidden');
       if (this.els.stackFrontEditBtn) this.els.stackFrontEditBtn.classList.add('hidden');
       if (this.els.stackBackEditBtn) this.els.stackBackEditBtn.classList.add('hidden');
@@ -3989,6 +3995,12 @@ export class FableFlowApp {
     }
 
     if (this.els.stackBtnFlip) this.els.stackBtnFlip.classList.remove('hidden');
+    if (this.els.stackBtnFlip && this.els.stackBtnFlip.parentElement) {
+      this.els.stackBtnFlip.parentElement.classList.remove('two-buttons');
+    }
+    document
+      .querySelectorAll('.card-face-flip-btn[data-flip-target="stack"]')
+      .forEach((btn) => btn.classList.remove('hidden'));
     if (this.els.stackBtnTrash) this.els.stackBtnTrash.classList.remove('hidden');
     const isEditing = Boolean(this.state.isStackEditMode);
     if (this.els.stackFrontEditBtn) {

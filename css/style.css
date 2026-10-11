@@ -2823,3 +2823,69 @@ html.lang-zh .about-block-lead {
     gap: 6px;
   }
 }
+
+/* =========================================================================
+   UNIFIED BOTTOM BARS
+   Card / Stack / Calendar bars use the exact same geometry as the Timer bar:
+   same height, side padding, 54px buttons and 36px icons, laid out on the
+   same 4 slots. Two-button bars always use the outer slots (1 and 4), so the
+   two buttons sit in the same place on Today's card, an empty past day, and
+   the calendar.
+   ========================================================================= */
+.hero-bottom-bar,
+.card-bottom-bar,
+.stack-bottom-bar,
+.calendar-bottom-bar {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 54px);
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Timer bar lives inside .hero-timer-screen (24px side padding + bottom inset) */
+.hero-bottom-bar {
+  height: clamp(54px, 8.2dvh, 74px);
+  padding: 0 22px;
+}
+
+/* Card / Stack / Calendar bars reproduce the Timer bar's exact on-screen position */
+.card-bottom-bar,
+.stack-bottom-bar,
+.calendar-bottom-bar {
+  box-sizing: border-box;
+  height: calc(clamp(54px, 8.2dvh, 74px) + clamp(8px, 1.8dvh, 22px));
+  padding: 0 46px clamp(8px, 1.8dvh, 22px);
+}
+
+.card-bottom-icon-btn {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+}
+
+.card-bottom-icon-btn svg {
+  width: 36px;
+  height: 36px;
+}
+
+/* Two-button bars: outer slots */
+#card-stack-btn,
+#calendar-btn-return,
+#stack-btn-return {
+  grid-column: 1;
+}
+#card-flip-btn,
+#calendar-btn-zoomin,
+.stack-bottom-bar.two-buttons #stack-btn-zoomout {
+  grid-column: 4;
+}
+
+/* Four-button stack bar: same slots as the Timer bar */
+.stack-bottom-bar:not(.two-buttons) #stack-btn-zoomout { grid-column: 2; }
+#stack-btn-flip { grid-column: 3; }
+#stack-btn-trash { grid-column: 4; }
+#hero-btn-grid { grid-column: 1; }
+#hero-btn-playpause { grid-column: 2; }
+#hero-btn-stop { grid-column: 3; }
+#hero-btn-stopwatch { grid-column: 4; }
