@@ -20,11 +20,11 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v31';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v31';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v31';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v31';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v31';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v33';
+import { CardGestureMath } from './cardGestureMath.js?v=20261011_v33';
+import { SensoryEngine } from './sensoryEngine.js?v=20261011_v33';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v33';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v33';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -523,6 +523,12 @@ export class FableFlowApp {
       tourStepDesc: document.getElementById('tour-step-desc'),
       tourPrevBtn: document.getElementById('tour-prev-btn'),
       tourNextBtn: document.getElementById('tour-next-btn'),
+
+      aboutModalOverlay: document.getElementById('about-modal-overlay'),
+      aboutLetterCard: document.getElementById('about-letter-card'),
+      aboutLetterBlocks: document.getElementById('about-letter-blocks'),
+      aboutModalCloseBtn: document.getElementById('about-modal-close-btn'),
+      aboutStartTourBtn: document.getElementById('about-start-tour-btn'),
     };
   }
 
@@ -636,7 +642,7 @@ export class FableFlowApp {
     if (this.els.profileGuidedTourBtn) {
       this.els.profileGuidedTourBtn.addEventListener('click', () => {
         this.els.profileModalOverlay.classList.add('hidden');
-        this.startGuidedTour(0);
+        this.openAboutModal();
       });
     }
     if (this.els.profileResetTimeSelect) {
@@ -5698,11 +5704,130 @@ export class FableFlowApp {
     if (this.els.tourNextBtn) {
       this.els.tourNextBtn.addEventListener('click', advanceOrFinish);
     }
+
+    this.initAboutModalEvents();
+
     if (!this.state.hasCompletedOnboarding) {
-      this.startGuidedTour(0);
+      this.state.activePillar = 'home';
+      this.renderAll();
+      this.openAboutModal();
     } else {
       this.checkFirstTimePageHint();
     }
+  }
+
+  initAboutModalEvents() {
+    if (!this.els.aboutModalOverlay) return;
+
+    // Clicking surrounding area outside the card closes About & exits to homepage
+    this.els.aboutModalOverlay.addEventListener('click', (e) => {
+      if (e.target === this.els.aboutModalOverlay) {
+        this.closeAboutModalToHome();
+      }
+    });
+
+    // Tapping inside the letter while blocks are still fading in reveals all blocks immediately
+    if (this.els.aboutLetterCard) {
+      this.els.aboutLetterCard.addEventListener('click', (e) => {
+        if (
+          e.target.closest('#about-modal-close-btn') ||
+          e.target.closest('#about-start-tour-btn')
+        ) {
+          return;
+        }
+        this.revealAllAboutBlocksImmediately();
+      });
+    }
+
+    if (this.els.aboutModalCloseBtn) {
+      this.els.aboutModalCloseBtn.addEventListener('click', () => {
+        this.closeAboutModalToHome();
+      });
+    }
+
+    if (this.els.aboutStartTourBtn) {
+      this.els.aboutStartTourBtn.addEventListener('click', () => {
+        this.clearAboutBlockTimers();
+        if (this.els.aboutModalOverlay) {
+          this.els.aboutModalOverlay.classList.add('hidden');
+        }
+        this.startGuidedTour(0);
+      });
+    }
+  }
+
+  clearAboutBlockTimers() {
+    if (Array.isArray(this._aboutTimers)) {
+      this._aboutTimers.forEach((t) => clearTimeout(t));
+    }
+    this._aboutTimers = [];
+  }
+
+  revealAllAboutBlocksImmediately() {
+    this.clearAboutBlockTimers();
+    if (!this.els.aboutLetterBlocks) return;
+    const blocks = this.els.aboutLetterBlocks.querySelectorAll('.about-block');
+    blocks.forEach((b) => b.classList.add('visible'));
+  }
+
+  openAboutModal() {
+    if (!this.els.aboutModalOverlay) return;
+    this.clearAboutBlockTimers();
+    const blocks = this.els.aboutLetterBlocks
+      ? Array.from(this.els.aboutLetterBlocks.querySelectorAll('.about-block'))
+      : [];
+    blocks.forEach((b) => b.classList.remove('visible'));
+    this.els.aboutModalOverlay.classList.remove('hidden');
+    this.fitAboutCardTypography();
+
+    blocks.forEach((blockEl, idx) => {
+      const timerId = setTimeout(() => {
+        blockEl.classList.add('visible');
+      }, 90 + idx * 380);
+      this._aboutTimers.push(timerId);
+    });
+  }
+
+  fitAboutCardTypography() {
+    if (!this.els.aboutLetterBlocks) return;
+    const principles = Array.from(
+      this.els.aboutLetterBlocks.querySelectorAll('.about-block-principle')
+    );
+    const phil = this.els.aboutLetterBlocks.querySelector('.about-block-philosophy');
+    let pSize = 12.0;
+    principles.forEach((el) => {
+      el.style.fontSize = `${pSize}px`;
+    });
+    while (
+      pSize > 10.2 &&
+      principles.some((el) => el.scrollWidth > el.clientWidth)
+    ) {
+      pSize = Math.round((pSize - 0.2) * 10) / 10;
+      principles.forEach((el) => {
+        el.style.fontSize = `${pSize}px`;
+      });
+    }
+    if (phil) {
+      let philSize = 13.0;
+      phil.style.fontSize = `${philSize}px`;
+      while (philSize > 10.5 && phil.scrollWidth > phil.clientWidth) {
+        philSize = Math.round((philSize - 0.2) * 10) / 10;
+        phil.style.fontSize = `${philSize}px`;
+      }
+    }
+  }
+
+  closeAboutModalToHome() {
+    this.clearAboutBlockTimers();
+    if (this.els.aboutModalOverlay) {
+      this.els.aboutModalOverlay.classList.add('hidden');
+    }
+    this.state.hasCompletedOnboarding = true;
+    this.state.activePillar = 'home';
+    this.state.isCardFlipped = false;
+    this._todayFlipDeg = 0;
+    this.saveState();
+    this.renderAll();
   }
 
   checkFirstTimePageHint() {

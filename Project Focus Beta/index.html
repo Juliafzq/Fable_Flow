@@ -9,13 +9,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Fable / Flow" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261011_v32" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261011_v32" />
-  <link rel="manifest" href="manifest.json?v=20261011_v32" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261011_v33" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261011_v33" />
+  <link rel="manifest" href="manifest.json?v=20261011_v33" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261011_v31" />
+  <link rel="stylesheet" href="css/style.css?v=20261011_v33" />
 </head>
 <body>
 
@@ -397,7 +397,7 @@
           <span class="profile-menu-val">↗</span>
         </button>
         <button type="button" id="profile-guided-tour-btn" class="profile-menu-row">
-          <span>Guided Tour</span>
+          <span>About &amp; Tour</span>
           <span class="profile-menu-val">↗</span>
         </button>
         <label class="profile-menu-row" for="profile-reset-time-select">
@@ -491,6 +491,27 @@
       </div>
     </div>
 
+    <!-- About & Personal Letter Intro Card Overlay (Pops up before First-Time Tour & from Profile -> About & Tour) -->
+    <div id="about-modal-overlay" class="about-letter-overlay hidden" role="dialog" aria-modal="true" aria-label="About Fable and Flow">
+      <div class="about-letter-card" id="about-letter-card">
+        <div class="about-letter-card-inner">
+          <button type="button" id="about-modal-close-btn" class="about-letter-close-btn" aria-label="Close about card" title="Close">×</button>
+          <div class="about-letter-blocks" id="about-letter-blocks">
+            <div class="about-block about-block-title">Welcome to Fable &amp; Flow</div>
+            <div class="about-block about-block-lead">A simple companion for a fulfilling life, built on three principles:</div>
+            <div class="about-block about-block-principle"><span class="about-principle-label">Purpose:</span> Write down daily goals and cross them off.</div>
+            <div class="about-block about-block-principle"><span class="about-principle-label">Presence:</span> Reflect on the day and revisit past memories.</div>
+            <div class="about-block about-block-principle"><span class="about-principle-label">Flow:</span> Sink into deep focus using the pomodoros.</div>
+            <div class="about-block about-block-philosophy">No streaks, no badges. Just a small tool that<br />helps you focus on your real life, not this app.</div>
+            <div class="about-footer-row about-block">
+              <span class="about-block-signoff">Enjoy.</span>
+              <button type="button" id="about-start-tour-btn" class="about-continue-btn">Start Tour →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Minimalist Non-Interactive Guided Tutorial Overlay (Simple Animated Dots on Page + Action, What it does, Last & Next) -->
     <div id="onboarding-overlay" class="guided-tour-overlay hidden" role="dialog" aria-modal="true" aria-label="Guided Tutorial">
       <!-- Simple Minimalist Touch Dots on the Live Page (No Boxes) -->
@@ -520,6 +541,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261011_v31"></script>
+  <script type="module" src="js/app.js?v=20261011_v33"></script>
 </body>
 </html>
