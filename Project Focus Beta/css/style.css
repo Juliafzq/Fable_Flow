@@ -2901,3 +2901,24 @@ html.lang-zh .about-block-lead {
 .calendar-bottom-bar > * {
   grid-row: 1;
 }
+
+/* Card / Stack / Calendar icons: same visual size (~34px glyph) and 2.6px line
+   weight as the Timer icons. Each glyph has different whitespace in its 32px
+   viewBox, so each gets its own render size. */
+.card-bottom-icon-btn svg { overflow: visible; }
+.card-bottom-icon-btn svg path,
+.card-bottom-icon-btn svg rect,
+.card-bottom-icon-btn svg circle,
+.card-bottom-icon-btn svg line,
+.card-bottom-icon-btn svg polyline {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 2.6px;
+}
+#card-stack-btn svg { width: 44px; height: 44px; }
+#card-flip-btn svg,
+#stack-btn-flip svg { width: 52px; height: 52px; }
+#stack-btn-return svg,
+#calendar-btn-return svg { width: 49px; height: 49px; }
+#stack-btn-zoomout svg,
+#calendar-btn-zoomin svg { width: 48px; height: 48px; }
+#stack-btn-trash svg { width: 48px; height: 48px; }
