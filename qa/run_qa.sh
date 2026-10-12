@@ -8,6 +8,7 @@
 #   edit    tap-to-edit opens reliably, stray blur, × delete, no reflow when editing
 #   typing  Return -> next item, 8-item cap, shrink-to-fit, no size bounce while typing
 #   profile profile menu: Language dropdown (no auto-switch), persists, menu size stable
+#   timer   timers keep real time when the app is hidden / phone asleep / app reopened
 #   layout  Chinese overflow audit on every screen & tutorial step (375 + 320 wide) — slowest
 cd "$(dirname "$0")"
 pkill -f -- "--user-data-dir=/tmp/zh_audit_profile" 2>/dev/null; sleep 0.5
@@ -15,7 +16,7 @@ rm -rf /tmp/zh_audit_profile_* 2>/dev/null
 
 groups="$*"
 [ -z "$groups" ] && { sed -n '2,12p' "$0"; exit 2; }
-[ "$groups" = "all" ] && groups="bars flip edit typing profile layout"
+[ "$groups" = "all" ] && groups="bars flip edit typing profile timer layout"
 
 BASE=$((9400 + RANDOM % 300))
 TMP=$(mktemp -d)
@@ -55,6 +56,7 @@ for g in $groups; do
                 python3 shrink_test.py $size PORT
             done ;;
     profile) job "Language dropdown: no auto-switch, persists" pass python3 lang_select_test.py PORT ;;
+    timer)  job "Timer keeps time in background/sleep/reopen" pass python3 timer_background_test.py PORT ;;
     layout) job "Chinese overflow 375x667" pass python3 zh_audit_gate.py 375 667 PORT
             job "Chinese overflow 320x568" pass python3 zh_audit_gate.py 320 568 PORT ;;
     *) echo "unknown group: $g"; exit 2 ;;

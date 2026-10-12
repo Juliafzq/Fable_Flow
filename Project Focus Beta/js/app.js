@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261011_v54';
-import { CardGestureMath } from './cardGestureMath.js?v=20261011_v54';
-import { SensoryEngine } from './sensoryEngine.js?v=20261011_v54';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261011_v54';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261011_v54';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261012_v55';
+import { CardGestureMath } from './cardGestureMath.js?v=20261012_v55';
+import { SensoryEngine } from './sensoryEngine.js?v=20261012_v55';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261012_v55';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261012_v55';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261011_v54';
+} from './i18n.js?v=20261012_v55';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -3244,10 +3244,16 @@ export class FableFlowApp {
       this._boundVisibilityRefresh = () => {
         if (document.visibilityState === 'visible') {
           checkSystemDateRefresh();
+          // Timers keep real time while the app was hidden or the phone slept
+          this.applyTimerTick(this.syncRunningTimersToClock(Date.now()));
+        } else {
+          this.saveState();
         }
       };
       document.addEventListener('visibilitychange', this._boundVisibilityRefresh);
       window.addEventListener('focus', this._boundVisibilityRefresh);
+      window.addEventListener('pageshow', this._boundVisibilityRefresh);
+      window.addEventListener('pagehide', () => this.saveState());
     }
 
     this.tickInterval = setInterval(() => {
@@ -3256,58 +3262,65 @@ export class FableFlowApp {
         return;
       }
 
-      let anyUpdated = false;
-      let anyCompletedTransition = false;
-      const now = Date.now();
-
-      for (const slot of this.state.timers) {
-        if (slot.runState !== 'running') continue;
-
-        if (slot.mode === 'countdown') {
-          if (slot.remainingSeconds > 0) {
-            slot.remainingSeconds = Math.max(0, slot.remainingSeconds - 1);
-            slot.angleDegrees = OdometerDialPhysics.secondsToAngleDegrees(slot.remainingSeconds);
-            slot.lastTickTimestamp = now;
-            anyUpdated = true;
-
-            if (slot.remainingSeconds === 0) {
-              anyCompletedTransition = true;
-              this.endTimerToSilver(slot.quadrant, true);
-              this.showNotificationBanner(
-                this.t('Timer completed: {title}', {
-                  title: this.displayTaskTitle(slot.customTitle || this.t('Timer')).toUpperCase(),
-                })
-              );
-            }
-          }
-        } else {
-          const prevWholeMinutes = Math.floor(slot.remainingSeconds / 60);
-          slot.remainingSeconds += 1;
-          const newWholeMinutes = Math.floor(slot.remainingSeconds / 60);
-          slot.angleDegrees = OdometerDialPhysics.stopwatchSecondsToMinuteAngleDegrees(
-            slot.remainingSeconds
-          );
-          if (newWholeMinutes > prevWholeMinutes) {
-            this.sensory.playDialRatchetNotch(true);
-          }
-          slot.lastTickTimestamp = now;
-          anyUpdated = true;
-        }
-      }
-
-      if (anyUpdated) {
-        this.saveState();
-        if (this.state.activePillar === 'timer') {
-          if (this.state.timerSubMode === 'hero') {
-            this.renderHeroScreen();
-          } else if (anyCompletedTransition) {
-            this.renderGridScreen();
-          } else {
-            this.updateGridTimersInPlace();
-          }
-        }
-      }
+      this.applyTimerTick(this.syncRunningTimersToClock(Date.now()));
     }, 1000);
+  }
+
+  /**
+   * Advances every running timer by the REAL time elapsed since its last tick (not by "1 per tick"),
+   * so time keeps counting while the app is in the background or the phone is asleep
+   * (iOS pauses or throttles JS timers there). Keeps the sub-second remainder to avoid drift.
+   */
+  syncRunningTimersToClock(now) {
+    const result = { anyUpdated: false, completed: [] };
+    for (const slot of this.state.timers) {
+      if (slot.runState !== 'running') continue;
+      if (!slot.lastTickTimestamp) {
+        slot.lastTickTimestamp = now;
+        continue;
+      }
+      const elapsedSec = Math.floor((now - slot.lastTickTimestamp) / 1000);
+      if (elapsedSec <= 0) continue;
+      slot.lastTickTimestamp += elapsedSec * 1000;
+      result.anyUpdated = true;
+      if (slot.mode === 'countdown') {
+        slot.remainingSeconds = Math.max(0, slot.remainingSeconds - elapsedSec);
+        slot.angleDegrees = OdometerDialPhysics.secondsToAngleDegrees(slot.remainingSeconds);
+        if (slot.remainingSeconds === 0) result.completed.push(slot);
+      } else {
+        const prevWholeMinutes = Math.floor(slot.remainingSeconds / 60);
+        slot.remainingSeconds += elapsedSec;
+        slot.angleDegrees = OdometerDialPhysics.stopwatchSecondsToMinuteAngleDegrees(
+          slot.remainingSeconds
+        );
+        if (Math.floor(slot.remainingSeconds / 60) > prevWholeMinutes) {
+          this.sensory.playDialRatchetNotch(true);
+        }
+      }
+    }
+    return result;
+  }
+
+  applyTimerTick({ anyUpdated, completed }) {
+    if (!anyUpdated) return;
+    completed.forEach((slot) => {
+      this.endTimerToSilver(slot.quadrant, true);
+      this.showNotificationBanner(
+        this.t('Timer completed: {title}', {
+          title: this.displayTaskTitle(slot.customTitle || this.t('Timer')).toUpperCase(),
+        })
+      );
+    });
+    this.saveState();
+    if (this.state.activePillar === 'timer') {
+      if (this.state.timerSubMode === 'hero') {
+        this.renderHeroScreen();
+      } else if (completed.length) {
+        this.renderGridScreen();
+      } else {
+        this.updateGridTimersInPlace();
+      }
+    }
   }
 
   updateGridTimersInPlace() {
