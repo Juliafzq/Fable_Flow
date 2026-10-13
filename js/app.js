@@ -1,8 +1,8 @@
 /**
- * UNTO FLOW (formerly Fable / Flow) — Phase 1 & Phase 2 Complete MVP Application Controller
+ * UNTO / FLOW (formerly Fable / Flow) — Phase 1 & Phase 2 Complete MVP Application Controller
  *
  * Implements all PRD v4.2, Phase 1 ("Core Tactile Loop") & Phase 2 ("Complete Daily Ritual & Memory Archive") requirements:
- * 1. Minimalist 2-Object Homepage (01-home-page.png): Wide-tracked 'UNTO FLOW' header, exact 334x222 '06 OCT' mini-card, 3D Tomato.
+ * 1. Minimalist 2-Object Homepage (01-home-page.png): Wide-tracked 'UNTO / FLOW' header, exact 334x222 '06 OCT' mini-card, 3D Tomato.
  * 2. Photorealistic Hero Tomato 3D Dial (02-hero-timer.png) & 6-Tomato 2x3 Grid (03-grid-timer.png):
  *    - 1-minute notch snap, HH:MM:SS when > 60 min, Tap-on-Digits inline time editor (0-180 min / HH:MM).
  *    - Mirror-polished silver metallic completion state (End -> Silver -> Reset ↺).
@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v58';
-import { CardGestureMath } from './cardGestureMath.js?v=20261013_v58';
-import { SensoryEngine } from './sensoryEngine.js?v=20261013_v58';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v58';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v58';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v59';
+import { CardGestureMath } from './cardGestureMath.js?v=20261013_v59';
+import { SensoryEngine } from './sensoryEngine.js?v=20261013_v59';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v59';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v59';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261013_v58';
+} from './i18n.js?v=20261013_v59';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -3473,7 +3473,7 @@ export class FableFlowApp {
             nativeBridge.postMessage({
               action: 'scheduleTimer',
               slotIndex: slot.quadrant,
-              title: 'UNTO FLOW',
+              title: 'UNTO / FLOW',
               body: this.t('Timer completed: {title}', { title: taskTitle }),
               endsAtMs: dueAt,
             });

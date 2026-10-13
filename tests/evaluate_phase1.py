@@ -456,14 +456,14 @@ def verify_phase2_minimalist_homepage():
     js_app = read_file("js/app.js")
 
     assert 'id="screen-home"' in html
-    assert 'id="home-brand-title"' in html and "UNTO FLOW" in html
+    assert 'id="home-brand-title"' in html and "UNTO / FLOW" in html
     assert 'id="home-mini-card"' in html and 'id="home-mini-date"' in html
     assert 'id="home-tomato-btn"' in html
     assert ".home-mini-card" in css and ".home-tomato-btn" in css
     assert "renderHomeScreen()" in js_app
 
 
-check("Phase2Homepage", "Minimalist 2-Object Homepage (01-home-page.png) with 'UNTO FLOW' header, '06 OCT' mini-card, and 3D Tomato verified", verify_phase2_minimalist_homepage)
+check("Phase2Homepage", "Minimalist 2-Object Homepage (01-home-page.png) with 'UNTO / FLOW' header, '06 OCT' mini-card, and 3D Tomato verified", verify_phase2_minimalist_homepage)
 
 
 def verify_phase2_matte_black_journal_and_photos():

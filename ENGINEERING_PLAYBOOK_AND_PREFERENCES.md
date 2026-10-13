@@ -1,4 +1,4 @@
-> Note (Oct 13, 2026): the product is now named **UNTO FLOW** (umbrella brand **UNTO**); older references to Fable / Flow below refer to the same app.
+> Note (Oct 13, 2026): the product is now named **UNTO / FLOW** (umbrella brand **UNTO**); older references to Fable / Flow below refer to the same app.
 
 # Engineering Postmortem, Working Preferences & Quality Playbook
 **Prepared for:** Zuqi  
@@ -143,7 +143,7 @@ Two more patterns slowed us down without being outright bugs:
 
 ### 11. Shipping Workflow
 * Big or risky features go on a branch with a preview link first; merge only when asked ("merge").
-* "Push to the master link" means deploy to `main` → `https://juliafzq.github.io/Fable_Flow/`, with a cache-busted version.
+* "Push to the master link" means deploy to `main` → `https://juliafzq.github.io/UNTO_FLOW/`, with a cache-busted version.
 * After shipping, say what changed, what was verified, and what couldn't be verified.
 
 ### 12. QA Speed

@@ -1,8 +1,8 @@
-# UNTO FLOW — Project Focus Beta (`v0.2.0-beta`)
+# UNTO / FLOW — Project Focus Beta (`v0.2.0-beta`)
 
 **A Tactile Daily Ritual & 4-Pomodoro Focus App**
 
-This repository contains the **Phase 1 Beta ("Project Focus Beta")** implementation of **UNTO FLOW** (formerly Fable / Flow), built iteratively from **Milestone 0 (`v0.1.0-alpha` — Foundation & Data Layer)** through **Milestone 1 (`v0.2.0-beta` — Core Tactile Loop: Card Front + 4-Pomodoro Timer + Sensory Engine)** in strict alignment with `docs/PRD-v4.md` and `docs/Implementation-Plan.md`.
+This repository contains the **Phase 1 Beta ("Project Focus Beta")** implementation of **UNTO / FLOW** (formerly Fable / Flow), built iteratively from **Milestone 0 (`v0.1.0-alpha` — Foundation & Data Layer)** through **Milestone 1 (`v0.2.0-beta` — Core Tactile Loop: Card Front + 4-Pomodoro Timer + Sensory Engine)** in strict alignment with `docs/PRD-v4.md` and `docs/Implementation-Plan.md`.
 
 ---
 

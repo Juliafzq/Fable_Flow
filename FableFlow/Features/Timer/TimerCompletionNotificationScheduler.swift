@@ -24,7 +24,7 @@ public final class TimerCompletionNotificationScheduler: TimerCompletionNotifica
         requestPermissionIfNeeded()
 
         let content = UNMutableNotificationContent()
-        content.title = "UNTO FLOW"
+        content.title = "UNTO / FLOW"
         content.body = "\(taskTitle) timer complete."
         content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: "bell_alarm.wav"))
         content.badge = nil

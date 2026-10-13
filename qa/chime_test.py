@@ -199,7 +199,7 @@ hap = [m for m in ni['afterStart'] if m.get('action') == 'haptic']
 canc = [m for m in ni['afterPause'][len(ni['afterStart']):] if m.get('action') == 'cancelTimer' and m.get('slotIndex') == 0]
 print('I native bridge schedule:', len(sched), 'haptic:', len(hap), 'cancel:', len(canc))
 res['I native iOS wrapper bridge schedules & cancels local timer notifications'] = (
-    len(sched) == 1 and sched[0].get('title') == 'UNTO FLOW' and sched[0].get('endsAtMs', 0) > 0 and len(hap) >= 1 and len(canc) >= 1
+    len(sched) == 1 and sched[0].get('title') == 'UNTO / FLOW' and sched[0].get('endsAtMs', 0) > 0 and len(hap) >= 1 and len(canc) >= 1
 )
 
 for k, v in res.items(): print(('OK   ' if v else 'BAD  ') + k)

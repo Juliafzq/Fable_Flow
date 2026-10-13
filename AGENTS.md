@@ -1,11 +1,11 @@
 # Project Focus — Agent Instructions
 
 ## Project Context
-- **Project Name:** UNTO FLOW (repo: Juliafzq/Fable_Flow; formerly Project Focus / Fable / Flow)
+- **Project Name:** UNTO / FLOW (repo: Juliafzq/UNTO_FLOW; formerly Project Focus / Fable / Flow)
 - **Project Type:** To be decided
 - **Visibility:** Private personal project. Never make the GitHub repository public or add collaborators unless the owner explicitly asks.
 - **Workspace Root:** `/usr/local/google/home/zuqi/github/ProjectFocus`
-- **GitHub Remote:** `git@github.com:Juliafzq/Fable_Flow.git` (private)
+- **GitHub Remote:** `git@github.com:Juliafzq/UNTO_FLOW.git` (private)
 
 ## User Profile & Communication Guidelines
 - **Non-SWE Collaboration:** The project owner is not a software engineer.
@@ -27,5 +27,5 @@
   3. `git push`
 - **Keep commands simple** so they match the owner's saved Jetski allow rules (`git add`, `git commit`, `git push`) and run without approval prompts: no `$(...)`, backticks, or flags before the subcommand (like `git -c ...`). Chaining with `&&` is fine.
 - **Check before saving:** Run `git status` first and make sure no secrets (`.env` files, API keys, passwords) are included.
-- **How pushing works:** Pushes go to `git@github.com:Juliafzq/Fable_Flow.git` using this machine's existing SSH key; no extra sign-in is needed.
-- **Stay private:** Never change the repository's visibility. If the GitHub CLI is installed and signed in, `gh repo view Juliafzq/Fable_Flow --json visibility` should report `PRIVATE`.
+- **How pushing works:** Pushes go to `git@github.com:Juliafzq/UNTO_FLOW.git` using this machine's existing SSH key; no extra sign-in is needed.
+- **Stay private:** Never change the repository's visibility. If the GitHub CLI is installed and signed in, `gh repo view Juliafzq/UNTO_FLOW --json visibility` should report `PRIVATE`.

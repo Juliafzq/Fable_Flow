@@ -166,7 +166,7 @@
 				CURRENT_PROJECT_VERSION = 58;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FableFlow/App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "UNTO FLOW";
+				INFOPLIST_KEY_CFBundleDisplayName = "UNTO / FLOW";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -193,7 +193,7 @@
 				CURRENT_PROJECT_VERSION = 58;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FableFlow/App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "UNTO FLOW";
+				INFOPLIST_KEY_CFBundleDisplayName = "UNTO / FLOW";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

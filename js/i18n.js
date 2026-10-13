@@ -1,8 +1,8 @@
 /**
- * UNTO FLOW — Lightweight i18n (English / Simplified Chinese).
+ * UNTO / FLOW — Lightweight i18n (English / Simplified Chinese).
  *
  * Keys are the original English strings (or English templates with {params}),
- * so English is always the fallback. The app name (UNTO FLOW), all dates, and
+ * so English is always the fallback. The app name (UNTO / FLOW), all dates, and
  * the monthly calendar intentionally stay in English and are NOT listed here.
  */
 
@@ -234,7 +234,7 @@ const ZH = {
   'Account and Cloud Sync': '账号与同步',
   'Close account modal': '关闭',
   'Close': '关闭',
-  'About UNTO FLOW': '关于 UNTO FLOW',
+  'About UNTO / FLOW': '关于 UNTO / FLOW',
   'Close about card': '关闭',
   'Guided Tutorial': '教程',
   'Close tutorial': '关闭教程',

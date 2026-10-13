@@ -3,13 +3,13 @@ import WebKit
 import UserNotifications
 import UIKit
 
-/// Full-screen native iOS wrapper for UNTO FLOW.
+/// Full-screen native iOS wrapper for UNTO / FLOW.
 /// Bridges the web app's tomato timers directly to iOS `UNUserNotificationCenter`
 /// so timer completion chimes ring reliably on the Lock Screen and in the background
 /// with zero background battery drain and zero interference with Apple Music / Spotify.
 struct UntoFlowWebContainerView: UIViewRepresentable {
     /// Live GitHub Pages URL so UI updates ship automatically without re-building in Xcode.
-    static let liveAppURL = URL(string: "https://juliafzq.github.io/Fable_Flow/?native_ios=1")!
+    static let liveAppURL = URL(string: "https://juliafzq.github.io/UNTO_FLOW/?native_ios=1")!
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -98,7 +98,7 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
 
             case "scheduleTimer":
                 let slotIndex = (body["slotIndex"] as? Int) ?? 0
-                let title = (body["title"] as? String) ?? "UNTO FLOW"
+                let title = (body["title"] as? String) ?? "UNTO / FLOW"
                 let messageText = (body["body"] as? String) ?? "Focus session complete."
                 let delaySec: TimeInterval
                 if let endsAtMs = body["endsAtMs"] as? Double {

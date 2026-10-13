@@ -1,7 +1,7 @@
-# UNTO FLOW — Publishing & Maintenance Guide (International + Mainland China)
+# UNTO / FLOW — Publishing & Maintenance Guide (International + Mainland China)
 
 > **v3 — low-cost, phased, with the monetization plan.** Spend only what's needed now and add paid pieces once there's demand. The monetization plan sits right after the locked decisions; the phases reference it as M1–M12.
-> **Brand setup (renamed Oct 13, 2026):** the umbrella name is **UNTO** (the earlier "Fable Studio" plan was dropped over name conflicts). The app is **UNTO FLOW** (formerly Fable / Flow). UNTO's domain is **still to be chosen**, so **`<brand-domain>`** (a `.com` for UNTO) stays as a placeholder below.
+> **Brand setup (renamed Oct 13, 2026):** the umbrella name is **UNTO** (the earlier "Fable Studio" plan was dropped over name conflicts). The app is **UNTO / FLOW** (formerly Fable / Flow). UNTO's domain is **still to be chosen**, so **`<brand-domain>`** (a `.com` for UNTO) stays as a placeholder below.
 > **Owners:** 🧑 = you (accounts, IDs, payments, legal) · 🤖 = me (code, configs, docs, QA).
 > Prices and rules were checked in October 2026 and change over time. ⚠️ marks items to re-verify at the moment you act.
 
@@ -93,7 +93,7 @@ Free users' daily cards keep being saved, so buying Pro later reveals the whole 
 | Product ID | Type | Price (US) | Display name | Notes |
 |---|---|---|---|---|
 | `flow_trial_14day` | Non-consumable | **\$0** | **"14-Day Trial"** | Apple requires this "XX-day Trial" naming for trials in non-subscription apps |
-| `flow_pro` | Non-consumable | **\$4.99** at launch | "UNTO FLOW Pro" | **Family Sharing on** (generous and fits the brand; it can't be turned off once enabled) |
+| `flow_pro` | Non-consumable | **\$4.99** at launch | "UNTO / FLOW Pro" | **Family Sharing on** (generous and fits the brand; it can't be turned off once enabled) |
 | `flow_tip_small` | Consumable | \$1.99 | "Small Tip" | Tips unlock nothing; show a thank-you note |
 | `flow_tip_medium` | Consumable | \$4.99 | "Kind Tip" | |
 | `flow_tip_large` | Consumable | \$9.99 | "Generous Tip" | |
@@ -225,7 +225,7 @@ Either way: add the provider's DNS records (MX, SPF, DKIM), create `hello@` and 
 
 ### 1.4 Trademarks 🧑 (Phase D; 🤖 can run the database search first)
 - ~~Settle the umbrella brand name first~~ ✅ **UNTO** chosen. Next: check trademark availability for UNTO in classes **9 / 39 / 43**, then file.
-- **China first:** China is first-to-file, so file the umbrella name "UNTO" + "UNTO FLOW" in **class 9** (software), plus **39 / 43** (travel, hospitality) once those businesses get close. CNIPA ≈ ¥270–300 per class ⚠️.
+- **China first:** China is first-to-file, so file the umbrella name "UNTO" + "UNTO / FLOW" in **class 9** (software), plus **39 / 43** (travel, hospitality) once those businesses get close. CNIPA ≈ ¥270–300 per class ⚠️.
 - **US:** USPTO (~\$350 per class ⚠️) when budget allows.
 - **Avoid plain "Fable"** as the trademarked mark: crowded name (Fable Studios Inc., Fable Hotels & Resorts, Xbox game series, Fable homeware, a book-club app).
 
@@ -242,7 +242,7 @@ Before paying \$99/yr for the Apple Developer Program, you can install the nativ
 3. Click **FableFlow** at the top of the left sidebar → **Signing & Capabilities** tab → select your **Personal Team**, and type any unique Bundle Identifier (e.g. `com.unto.flow.zuqi`).
 4. Plug your iPhone into your Mac, select your iPhone at the top of Xcode, and press **Run (▶ / ⌘R)**.
 5. On your iPhone (first time only): open **Settings → General → VPN & Device Management**, tap your Apple ID under *Developer App*, and tap **Trust**.
-6. Open **UNTO FLOW** on your iPhone and start a timer — tap **Allow** when iOS asks for notification permission. Even if you lock your phone or listen to music in another app, the 3-ring mechanical bell will chime right at `00:00`! *(Note: Apple's free personal signing lasts 7 days per plug-in; once you enroll in the \$99/yr program for TestFlight/App Store, that 7-day limit disappears.)*
+6. Open **UNTO / FLOW** on your iPhone and start a timer — tap **Allow** when iOS asks for notification permission. Even if you lock your phone or listen to music in another app, the 3-ring mechanical bell will chime right at `00:00`! *(Note: Apple's free personal signing lasts 7 days per plug-in; once you enroll in the \$99/yr program for TestFlight/App Store, that 7-day limit disappears.)*
 
 The web app is wrapped as a native iOS app, using the same code.
 
@@ -252,7 +252,7 @@ The web app is wrapped as a native iOS app, using the same code.
 | 2.2 | App icon set, launch screen, iPhone-only at first | iPad later |
 | 2.3 | **StoreKit 2 purchases** | `flow_trial_14day` (\$0), `flow_pro` (non-consumable), `flow_tip_small/medium/large` (consumables), **Restore Purchases** button (see M3) |
 | 2.4 | **Trial offer & free tier** | Trial-offer screen after the tour with the required disclosures → \$0 trial purchase; trial date read from the receipt; day-12 note; after 14 days: one card + one tomato with small locks; past cards kept and revealed with Pro (see M2, M4) |
-| 2.5 | **Pro screen, tips & Offer Codes** | One calm Pro screen (what's included, price, Restore); "Support UNTO FLOW" row in Profile with 3 tips + thank-you; redeem sheet for the 50 founding codes; all copy EN + 中文 for your review |
+| 2.5 | **Pro screen, tips & Offer Codes** | One calm Pro screen (what's included, price, Restore); "Support UNTO / FLOW" row in Profile with 3 tips + thank-you; redeem sheet for the 50 founding codes; all copy EN + 中文 for your review |
 | 2.6 | **Timer-end notification** | Local notification scheduled when a timer starts (the background-timer fix from v55 + a real lock-screen alert) |
 | 2.7 | **Sign-in** | Email + Apple (+ Google internationally). Apple requires **in-app account deletion** for apps with accounts → add "Delete account & data" |
 | 2.8 | **Data export** | GDPR-friendly "Export my data" (JSON / images) |
@@ -316,7 +316,7 @@ The same domain is also your **personal portfolio**: `<brand-domain>` (portfolio
 
 | Item | What to enter |
 |---|---|
-| App record | Name "UNTO FLOW" (must be unique; have a backup like "UNTO FLOW: Card & Timer"), subtitle, Bundle ID, SKU |
+| App record | Name "UNTO / FLOW" (must be unique; have a backup like "UNTO / FLOW: Card & Timer"), subtitle, Bundle ID, SKU |
 | Localizations | **English (US)** + **Chinese (Simplified)**: name, subtitle, description, keywords, What's New |
 | Screenshots | Required largest iPhone size (6.9") ⚠️; 3–6 per language; optional preview video |
 | Pricing | App free. In-app purchases per M3: 14-Day Trial \$0, Pro \$4.99, tips \$1.99 / \$4.99 / \$9.99. Family Sharing on for Pro. Each item needs a review screenshot + note. Apple fills in other countries' prices (China is set in Phase 7). |
@@ -343,7 +343,7 @@ The same domain is also your **personal portfolio**: `<brand-domain>` (portfolio
 | 7.1 | Buy a **mainland server** (Shanghai/Beijing region) at the provider holding your domain. Lean start: **Alibaba 2 vCPU/2 GB at ¥99/yr** (same price on renewal; enough for a slim Supabase, i.e. Postgres + Auth + REST, at small scale). Upgrade to 4 GB when needed. | 🧑 | day 1 |
 | 7.2 | **ICP filing for `<brand-domain>`** (individual, `.com` is filable; the domain must sit at a Chinese registrar under your real name): ID, face check in the provider's app, MIIT SMS verification within 24 h, provincial review. Describe it as a personal productivity tool. | 🧑 | 1–3 weeks |
 | 7.3 | Install **self-hosted Supabase** (Docker), same schema/RLS; domestic email sender (DirectMail/SES) for auth mails; daily backups to OSS/COS; HTTPS cert for `api-cn.<brand-domain>` | 🤖 (you provide server access) | 2–3 days |
-| 7.4 | **App备案** for UNTO FLOW: app name, Bundle ID, iOS signing public key + SHA-1, backend domain `api-cn.<brand-domain>`, no third-party SDKs that need disclosure (or list them) | 🧑 (🤖 extracts cert values) | 1–3 weeks |
+| 7.4 | **App备案** for UNTO / FLOW: app name, Bundle ID, iOS signing public key + SHA-1, backend domain `api-cn.<brand-domain>`, no third-party SDKs that need disclosure (or list them) | 🧑 (🤖 extracts cert values) | 1–3 weeks |
 | 7.5 | China privacy policy (PIPL: purposes, data stored in China, how to delete, contact); first-launch consent dialog | 🤖 | — |
 | 7.6 | App Store Connect: enter the **App备案 number** for the China storefront; Chinese metadata/screenshots; **China prices** (Pro ¥25–30; Chinese Apple IDs pay with Alipay / WeChat Pay); **add mainland China to Availability**; submit an update | 🧑 | 1–2 days review |
 | 7.7 | Show the filing number in the app (About) and on the China website footer | 🤖 | — |

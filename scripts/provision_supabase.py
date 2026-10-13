@@ -90,13 +90,13 @@ def provision_with_token(args):
       raise RuntimeError("No Supabase organization found on this account.")
     org_id = orgs[0]["id"]
     db_pass = f"Ff!{secrets.token_urlsafe(16)}9a"
-    print(f"[2/5] Creating Free Tier project 'Fable_Flow' in org {org_id}...")
+    print(f"[2/5] Creating Free Tier project 'UNTO_FLOW' in org {org_id}...")
     target = api_request(
         "POST",
         "/projects",
         token,
         {
-            "name": "Fable_Flow",
+            "name": "UNTO_FLOW",
             "organization_id": org_id,
             "db_pass": db_pass,
             "region": args.region,
@@ -121,8 +121,8 @@ def provision_with_token(args):
 
   print("[4/5] Configuring Supabase Auth URLs, auto-confirm & OAuth providers...")
   auth_patch = {
-      "site_url": "https://juliafzq.github.io/Fable_Flow/",
-      "uri_allow_list": "https://juliafzq.github.io/Fable_Flow/**,http://localhost:8090/**",
+      "site_url": "https://juliafzq.github.io/UNTO_FLOW/",
+      "uri_allow_list": "https://juliafzq.github.io/UNTO_FLOW/**,http://localhost:8090/**",
       "mailer_autoconfirm": True,
   }
   if args.google_client_id and args.google_secret:
@@ -142,7 +142,7 @@ def provision_with_token(args):
     raise RuntimeError("Could not find 'anon' API key for project.")
   project_url = f"https://{ref}.supabase.co"
   update_default_config_in_js(project_url, anon_key)
-  print(f"\n[DONE] Fable_Flow is now connected to {project_url}!")
+  print(f"\n[DONE] UNTO_FLOW is now connected to {project_url}!")
 
 
 def main():

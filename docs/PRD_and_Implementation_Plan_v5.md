@@ -1,8 +1,8 @@
-# UNTO FLOW — PRD & Implementation Plan v5
+# UNTO / FLOW — PRD & Implementation Plan v5
 
-> Renamed from Fable / Flow to UNTO FLOW on Oct 13, 2026; umbrella brand: UNTO.
+> Renamed from Fable / Flow to UNTO / FLOW on Oct 13, 2026; umbrella brand: UNTO.
 >
-> **Live build:** `v54` · **https://juliafzq.github.io/Fable_Flow/** · repo `Juliafzq/Fable_Flow` (`main`)
+> **Live build:** `v54` · **https://juliafzq.github.io/UNTO_FLOW/** · repo `Juliafzq/UNTO_FLOW` (`main`)
 >
 > v5 consolidates the v4.7 baseline (Phase 3, `v36`) with every change shipped on **Oct 11 (v37 → v54)**. Where v5 and v4.7 disagree, **v5 wins**. Sections that didn't change (3D tomato rendering, silver completion state, photo layouts, Supabase backend, cost options) are summarized; their detailed specs in v4.7 still apply.
 
@@ -41,7 +41,7 @@ The v4.7 principles still hold: mockups beat text, minimal copy, photoreal tomat
 
 ### 3.2 Simplified Chinese (new)
 
-- **Stays in English in both languages:** the name **UNTO FLOW**, all dates (`11 OCT`, `SUNDAY — OCT 11`, the date strip), and the monthly calendar.
+- **Stays in English in both languages:** the name **UNTO / FLOW**, all dates (`11 OCT`, `SUNDAY — OCT 11`, the date strip), and the monthly calendar.
 - **Never translated:** user-typed text (tasks, reflections, timer titles). The built-in defaults `Example Task` / `Focus Session` display as `示例待办` / `专注时间`.
 - **Persistence:** the choice is saved on the device and in the synced account state (`state.language`).
 - **Approved terms:**
@@ -149,7 +149,7 @@ Every editable field (inline tasks, both reflections, the title dialog, the time
 
 ### 3.9 Platform & delivery
 
-- **Live link:** repo renamed to **`Fable_Flow`**; the live link is `https://juliafzq.github.io/Fable_Flow/`.
+- **Live link:** repo renamed to **`UNTO_FLOW`**; the live link is `https://juliafzq.github.io/UNTO_FLOW/`.
 - **Updates:** a home-screen install picks up new versions automatically when it's reopened or brought back to the foreground (service worker checks for updates on resume; network-first with no-cache).
 - **Portrait lock:** the manifest requests portrait. If the phone rotates anyway, a CSS counter-rotation keeps the app upright, and touch coordinates are remapped.
 - **Sign-in:** Google (`G`) and Apple buttons; Supabase auth and sync (see v4.7 Part III). `scripts/provision_supabase.py` provisions a project.
@@ -163,7 +163,7 @@ Every editable field (inline tasks, both reflections, the title dialog, the time
 
 | Version | Change |
 |---|---|
-| v37 | Repo renamed to `Fable_Flow`; Google/Apple sign-in buttons; Supabase provisioner script |
+| v37 | Repo renamed to `UNTO_FLOW`; Google/Apple sign-in buttons; Supabase provisioner script |
 | v38 | Natural-direction date-strip scrolling with momentum; carousel scrolling; portrait lock |
 | v39–v40 | Service worker cache-bust; home-screen app auto-updates on resume and when a new version takes over |
 | v41 | IME-safe input across all fields (Chinese Pinyin & handwriting, JP, KR) |
