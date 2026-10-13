@@ -121,7 +121,8 @@ export class OdometerDialPhysics {
         candidate += '…';
       }
     }
-    return candidate.toUpperCase();
+    // Keep the exact upper/lower case the person typed (no forced ALL CAPS)
+    return candidate;
   }
 
   /**

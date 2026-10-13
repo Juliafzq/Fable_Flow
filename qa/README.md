@@ -9,5 +9,5 @@ cd qa
 ./run_qa.sh all             # big changes / merges
 ```
 
-Groups: `bars`, `flip`, `edit`, `typing`, `profile`, `layout` — see the header of `run_qa.sh`.
+Groups: `bars`, `flip`, `edit`, `typing`, `profile`, `timer`, `assign`, `twist`, `about`, `layout` — see the header of `run_qa.sh`.
 Screenshots land in `qa/shots/` (git-ignored). See ENGINEERING_PLAYBOOK_AND_PREFERENCES.md Part 3.

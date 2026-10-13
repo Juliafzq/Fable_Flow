@@ -38,7 +38,7 @@ const ZH = {
   'Click to attach a photo': '点击添加照片',
   'Click to attach a second photo': '点击再加一张照片',
   'Delete item': '删除待办',
-  'Click lit-up tomato to unassign (return to grey)': '点击亮起的番茄可取消关联',
+  'Open this tomato timer': '打开这个番茄计时',
   'Click grey tomato to light up and open Timer page': '点击灰色番茄，开始计时',
 
   // ---- Timer ----

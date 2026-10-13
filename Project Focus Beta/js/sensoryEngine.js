@@ -4,7 +4,8 @@
  * Synthesizes authentic organic physical sounds with zero external network dependencies:
  * - playDialRatchetNotch(isWindingUp): Crisp mechanical gear detent click (higher pitch winding up, slightly lower unwinding).
  * - playMechanicalTick(): Subtle muted clockwork escapement tick.
- * - playCompletionChime(): Warm resonant ceramic/wood singing chime when a Pomodoro reaches 00:00.
+ * - playCompletionChime(): One mechanical kitchen-timer bell ring (e.g. when you end a timer yourself).
+ * - playCompletionAlarm(): The bell rings several times when a Pomodoro reaches 00:00 (tap to stop).
  * - playPencilStrikethrough(isErasing): Textured graphite-on-cotton-cardstock scratch sound.
  * - playCardFlipSwoosh(): Soft 300gsm cardstock air turn + tabletop snap.
  *
@@ -181,14 +182,74 @@ export class SensoryEngine {
    * Models the physical escapement release clapper + steel hammer strike + inharmonic
    * hemispherical brass/chrome bell modes (Rayleigh/Chladni modal ratios with natural
    * doublet acoustic beating and frequency-dependent metallic decay).
+   * One ring, e.g. when you end a timer yourself.
    */
   playCompletionChime() {
     this._triggerHaptic('Haptic: Pomodoro Bell Ring', [18, 35, 45]);
     const ctx = this._ensureContext();
     if (!ctx) return;
+    this._scheduleBellRing(ctx, ctx.currentTime, ctx.destination);
+  }
 
-    const now = ctx.currentTime;
+  /**
+   * A timer reached 00:00: ring the bell several times (default 3 rings, ~1.8 s apart).
+   * Every ring is queued on the audio clock up front, so the later rings still play when a
+   * background tab's JS timers are throttled. Any tap stops it (stopCompletionAlarm).
+   */
+  playCompletionAlarm(rings = 3, gapSec = 1.8) {
+    this.stopCompletionAlarm();
+    const hapticTimers = [];
+    for (let k = 0; k < rings; k++) {
+      hapticTimers.push(
+        setTimeout(() => this._triggerHaptic('Haptic: Pomodoro Bell Ring', [18, 35, 45]), k * gapSec * 1000)
+      );
+    }
+    const alarm = {
+      hapticTimers,
+      gain: null,
+      endsAt: performance.now() + ((rings - 1) * gapSec + 2.4) * 1000,
+    };
+    const ctx = this._ensureContext();
+    if (ctx) {
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(1, ctx.currentTime);
+      gain.connect(ctx.destination);
+      const t0 = ctx.currentTime + 0.02;
+      for (let k = 0; k < rings; k++) {
+        this._scheduleBellRing(ctx, t0 + k * gapSec, gain);
+      }
+      alarm.gain = gain;
+    }
+    this._alarm = alarm;
+  }
 
+  isAlarmRinging() {
+    return Boolean(this._alarm) && performance.now() < this._alarm.endsAt;
+  }
+
+  /** Silences a ringing alarm with a short fade (no click). */
+  stopCompletionAlarm() {
+    const alarm = this._alarm;
+    if (!alarm) return;
+    this._alarm = null;
+    alarm.hapticTimers.forEach((t) => clearTimeout(t));
+    if (alarm.gain && this.audioCtx) {
+      try {
+        const now = this.audioCtx.currentTime;
+        alarm.gain.gain.cancelScheduledValues(now);
+        alarm.gain.gain.setValueAtTime(alarm.gain.gain.value, now);
+        alarm.gain.gain.linearRampToValueAtTime(0, now + 0.12);
+      } catch (_) {}
+      setTimeout(() => {
+        try {
+          alarm.gain.disconnect();
+        } catch (_) {}
+      }, 400);
+    }
+  }
+
+  /** One "k-DING" (escapement grace tap + full bell strike) at audio time `when` into `dest`. */
+  _scheduleBellRing(ctx, when, dest) {
     const triggerBellStrike = (strikeTime, velocity) => {
       // 1. Physical metallic hammer-on-brass impact impulse (short filtered burst)
       const clickDur = 0.018;
@@ -213,7 +274,7 @@ export class SensoryEngine {
 
       noise.connect(bp);
       bp.connect(clickGain);
-      clickGain.connect(ctx.destination);
+      clickGain.connect(dest);
       noise.start(strikeTime);
 
       // 2. Inharmonic spun-brass Pomodoro bell modal partials (fundamental D6 ~ 1174.6 Hz)
@@ -244,7 +305,7 @@ export class SensoryEngine {
         gain.gain.exponentialRampToValueAtTime(0.0004, strikeTime + p.decay);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(strikeTime);
         osc.stop(strikeTime + p.decay + 0.02);
       });
@@ -252,8 +313,8 @@ export class SensoryEngine {
 
     // Mechanical Pomodoro bell double-clapper action:
     // Quick escapement release grace tap ("k-") followed 52ms later by the full bell ring ("-DING!")
-    triggerBellStrike(now, 0.32);
-    triggerBellStrike(now + 0.052, 1.0);
+    triggerBellStrike(when, 0.32);
+    triggerBellStrike(when + 0.052, 1.0);
   }
 
   /**

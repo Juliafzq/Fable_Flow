@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261012_v55';
-import { CardGestureMath } from './cardGestureMath.js?v=20261012_v55';
-import { SensoryEngine } from './sensoryEngine.js?v=20261012_v55';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261012_v55';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261012_v55';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v56';
+import { CardGestureMath } from './cardGestureMath.js?v=20261013_v56';
+import { SensoryEngine } from './sensoryEngine.js?v=20261013_v56';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v56';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v56';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261012_v55';
+} from './i18n.js?v=20261013_v56';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -73,6 +73,11 @@ export class FableFlowApp {
     this.init3DRenderers();
     this.bindGlobalEvents();
     this.startWallClockTicker();
+    this.armTimerDueAlarm();
+    // Any tap or key press silences a ringing timer bell
+    const silenceTimerBell = () => this.sensory.stopCompletionAlarm();
+    window.addEventListener('pointerdown', silenceTimerBell, { capture: true, passive: true });
+    window.addEventListener('keydown', silenceTimerBell, { capture: true });
     this.renderAll();
     this.initFirstTimeOnboarding();
     if (this.supabaseSync.isLoggedIn()) {
@@ -3023,6 +3028,7 @@ export class FableFlowApp {
         slot.runState = 'idle';
         slot.lastTickTimestamp = null;
       }
+      this.armTimerDueAlarm();
 
       this.saveState();
       this.renderHeroScreen();
@@ -3199,6 +3205,7 @@ export class FableFlowApp {
 
     this.sensory.playDialRatchetNotch(true);
     this.showTelemetryToast(this.t('Timer set to {n} min', { n: clampedMins }));
+    this.armTimerDueAlarm();
     this.saveState();
     this.renderAll();
   }
@@ -3246,8 +3253,11 @@ export class FableFlowApp {
           checkSystemDateRefresh();
           // Timers keep real time while the app was hidden or the phone slept
           this.applyTimerTick(this.syncRunningTimersToClock(Date.now()));
+          this.armTimerDueAlarm();
         } else {
           this.saveState();
+          // Re-arm from this event so the end-of-timer wake-up isn't throttled in the background
+          this.armTimerDueAlarm();
         }
       };
       document.addEventListener('visibilitychange', this._boundVisibilityRefresh);
@@ -3272,7 +3282,7 @@ export class FableFlowApp {
    * (iOS pauses or throttles JS timers there). Keeps the sub-second remainder to avoid drift.
    */
   syncRunningTimersToClock(now) {
-    const result = { anyUpdated: false, completed: [] };
+    const result = { anyUpdated: false, completed: [], lateMs: new Map() };
     for (const slot of this.state.timers) {
       if (slot.runState !== 'running') continue;
       if (!slot.lastTickTimestamp) {
@@ -3281,12 +3291,16 @@ export class FableFlowApp {
       }
       const elapsedSec = Math.floor((now - slot.lastTickTimestamp) / 1000);
       if (elapsedSec <= 0) continue;
+      const dueAt = slot.lastTickTimestamp + slot.remainingSeconds * 1000;
       slot.lastTickTimestamp += elapsedSec * 1000;
       result.anyUpdated = true;
       if (slot.mode === 'countdown') {
         slot.remainingSeconds = Math.max(0, slot.remainingSeconds - elapsedSec);
         slot.angleDegrees = OdometerDialPhysics.secondsToAngleDegrees(slot.remainingSeconds);
-        if (slot.remainingSeconds === 0) result.completed.push(slot);
+        if (slot.remainingSeconds === 0) {
+          result.completed.push(slot);
+          result.lateMs.set(slot, Math.max(0, now - dueAt));
+        }
       } else {
         const prevWholeMinutes = Math.floor(slot.remainingSeconds / 60);
         slot.remainingSeconds += elapsedSec;
@@ -3301,13 +3315,13 @@ export class FableFlowApp {
     return result;
   }
 
-  applyTimerTick({ anyUpdated, completed }) {
+  applyTimerTick({ anyUpdated, completed, lateMs }) {
     if (!anyUpdated) return;
     completed.forEach((slot) => {
-      this.endTimerToSilver(slot.quadrant, true);
+      this.endTimerToSilver(slot.quadrant, true, lateMs ? lateMs.get(slot) || 0 : 0);
       this.showNotificationBanner(
         this.t('Timer completed: {title}', {
-          title: this.displayTaskTitle(slot.customTitle || this.t('Timer')).toUpperCase(),
+          title: this.displayTaskTitle(slot.customTitle || this.t('Timer')),
         })
       );
     });
@@ -3367,6 +3381,7 @@ export class FableFlowApp {
       slot.lastTickTimestamp = Date.now();
       this.sensory.playMechanicalTick();
     }
+    this.armTimerDueAlarm();
 
     this.saveState();
     this.renderAll();
@@ -3396,7 +3411,7 @@ export class FableFlowApp {
     }
   }
 
-  endTimerToSilver(quadrant, completedNaturally = false) {
+  endTimerToSilver(quadrant, completedNaturally = false, lateMs = 0) {
     this.closeHeroTimeEditorDOM();
     const slot = this.state.timers[quadrant];
     if (!slot) return;
@@ -3405,13 +3420,48 @@ export class FableFlowApp {
     slot.runState = 'completed';
     slot.lastTickTimestamp = null;
 
-    this.sensory.playCompletionChime();
+    // Reached 00:00 just now (or while you're away on another tab/app): ring the bell several times.
+    // Found finished only when you came back long after (phone was asleep): one soft chime.
+    // Ended it yourself: one chime.
+    const userAway = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    if (completedNaturally && (userAway || lateMs < 4000)) {
+      this.sensory.playCompletionAlarm();
+    } else {
+      this.sensory.playCompletionChime();
+    }
     if (!completedNaturally) {
       this.showTelemetryToast(this.t('Timer ended'));
     }
+    this.armTimerDueAlarm();
 
     this.saveState();
     this.renderAll();
+  }
+
+  /**
+   * One-shot wake-up at the exact moment the soonest running countdown reaches 00:00.
+   * Browsers throttle a hidden tab's 1 s ticker (down to once a minute), but a single fresh
+   * timeout armed from a user action or the "page hidden" event still fires on time, so the
+   * bell rings on time while you're on another tab or app (as long as the browser keeps the
+   * page running; a locked iPhone pauses web pages entirely).
+   */
+  armTimerDueAlarm() {
+    if (this._dueTimeout) {
+      clearTimeout(this._dueTimeout);
+      this._dueTimeout = null;
+    }
+    let soonest = Infinity;
+    for (const slot of this.state.timers) {
+      if (slot.runState !== 'running' || slot.mode !== 'countdown' || !slot.lastTickTimestamp) continue;
+      soonest = Math.min(soonest, slot.lastTickTimestamp + slot.remainingSeconds * 1000);
+    }
+    if (!Number.isFinite(soonest)) return;
+    const waitMs = Math.max(0, soonest - Date.now()) + 60;
+    this._dueTimeout = setTimeout(() => {
+      this._dueTimeout = null;
+      this.applyTimerTick(this.syncRunningTimersToClock(Date.now()));
+      this.armTimerDueAlarm();
+    }, waitMs);
   }
 
   resetCompletedTimer(quadrant) {
@@ -3550,8 +3600,14 @@ export class FableFlowApp {
   }
 
   handleCardTaskTomatoClick(task) {
+    // A lit (assigned) mini tomato opens that tomato's timer page. Unassigning lives only on the
+    // tomato page and the grid page (their dropdown "✕ Unassign Tomato"), so a tap can't wipe a timer.
     if (task.assignedQuadrant !== null && task.assignedQuadrant !== undefined) {
-      this.clearQuadrantAssignment(task.assignedQuadrant);
+      this.state.selectedQuadrant = task.assignedQuadrant;
+      this.state.activePillar = 'timer';
+      this.state.timerSubMode = 'hero';
+      this.saveState();
+      this.renderAll();
       return;
     }
 
@@ -3747,7 +3803,7 @@ export class FableFlowApp {
       const isLit =
         task.assignedQuadrant !== null && task.assignedQuadrant !== undefined;
       tomatoBtn.title = isLit
-        ? this.t('Click lit-up tomato to unassign (return to grey)')
+        ? this.t('Open this tomato timer')
         : this.t('Click grey tomato to light up and open Timer page');
 
       const miniImg = document.createElement('img');
@@ -4871,7 +4927,7 @@ export class FableFlowApp {
         '0'
       );
       const shortTitle = OdometerDialPhysics.formatShortTomatoTitle(
-        this.displayTaskTitle(slot.customTitle || '') || this.t('EXAMPLE TASK'),
+        this.displayTaskTitle(slot.customTitle || '') || this.t('Example Task'),
         4,
         22
       );
@@ -6046,7 +6102,7 @@ export class FableFlowApp {
         },
         animateFrame: (elapsedMs) => {
           if (this.els.heroSubtitle) {
-            this.els.heroSubtitle.textContent = `01 / ${this.t('EXAMPLE TASK')}`;
+            this.els.heroSubtitle.textContent = `01 / ${this.t('Example Task')}`;
           }
           const box = this.getElementBoxInTourOverlay(this.els.heroTomatoStage);
           if (!box) return;
@@ -6122,7 +6178,7 @@ export class FableFlowApp {
         },
         animateFrame: (elapsedMs) => {
           if (this.els.heroSubtitle) {
-            this.els.heroSubtitle.textContent = `01 / ${this.t('EXAMPLE TASK')}`;
+            this.els.heroSubtitle.textContent = `01 / ${this.t('Example Task')}`;
           }
           const readout = this.els.heroReadout;
           const editor = this.els.heroTimeEditor;
@@ -6657,10 +6713,12 @@ export class FableFlowApp {
     this.els.aboutModalOverlay.classList.remove('hidden');
     this.fitAboutCardTypography();
 
-    // Unhurried, calm reading cadence (~1.55s between blocks with a 1.15s soft fade-in)
-    const delaysMs = [250, 1550, 3100, 4650, 6200, 7750, 9300];
+    // Calm but brisk reading cadence: a new line every ~0.7s, each with a soft ~0.8s fade-in
+    // (whole letter readable in ~5s; v36 used ~1.55s steps, which felt too slow)
+    const firstMs = 200;
+    const stepMs = 700;
     blocks.forEach((blockEl, idx) => {
-      const waitMs = delaysMs[idx] !== undefined ? delaysMs[idx] : 250 + idx * 1550;
+      const waitMs = firstMs + idx * stepMs;
       const timerId = setTimeout(() => {
         blockEl.classList.add('visible');
       }, waitMs);
