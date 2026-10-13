@@ -1,5 +1,5 @@
 // UNTO / FLOW — Phase 3 Service Worker (Network-First with no-cache revalidation + Offline Cache)
-const CACHE_NAME = 'fable-flow-cache-v62';
+const CACHE_NAME = 'fable-flow-cache-v63';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -15,7 +15,23 @@ const PRECACHE_URLS = [
   './assets/icons/icon-512.png',
   './assets/tomatoes/home-tomato.png',
   './assets/tomatoes/hero-tomato-0.png',
-  './assets/tomatoes/hero-tomato-silver.png'
+  './assets/tomatoes/hero-tomato-silver.png',
+  './assets/tomatoes/grid-tomato-0.png',
+  './assets/tomatoes/grid-tomato-1.png',
+  './assets/tomatoes/grid-tomato-2.png',
+  './assets/tomatoes/grid-tomato-3.png',
+  './assets/tomatoes/grid-tomato-4.png',
+  './assets/tomatoes/grid-tomato-5.png',
+  './assets/tomatoes/grid-tomato-unassigned.png',
+  './assets/tomatoes/grid-tomato-silver.png',
+  './assets/tomatoes/mini-tomato-0.png',
+  './assets/tomatoes/mini-tomato-1.png',
+  './assets/tomatoes/mini-tomato-2.png',
+  './assets/tomatoes/mini-tomato-3.png',
+  './assets/tomatoes/mini-tomato-4.png',
+  './assets/tomatoes/mini-tomato-5.png',
+  './assets/tomatoes/mini-tomato-grey.png',
+  './assets/tomatoes/mini-tomato-silver.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -45,6 +61,23 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  // Cache-first for static image assets (/assets/) so tomato PNGs never re-fetch or flash on UI updates
+  if (url.pathname.includes('/assets/')) {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        if (cached) return cached;
+        return fetch(req).then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone)).catch(() => {});
+          }
+          return res;
+        });
+      })
+    );
+    return;
+  }
 
   // Network-first with cache: 'no-cache' so the root master link always serves the latest build online
   event.respondWith(

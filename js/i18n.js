@@ -55,6 +55,8 @@ const ZH = {
   '0–180m': '0–180',
   'Type minutes (0–180) or HH:MM (e.g. 02:30) · Enter to set':
     '输入 0–180 分钟或 02:30，回车确认',
+  'Minutes or HH:MM, up to 3 hours':
+    '输入分钟数或 时:分，最长 3 小时',
   '15m': '15分',
   '25m': '25分',
   '45m': '45分',

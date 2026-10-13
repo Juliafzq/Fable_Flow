@@ -4764,6 +4764,8 @@ export class FableFlowApp {
 
   /**
    * Renders Screen 2: 6-Pomodoro 2x3 Grid View (Mockup 03-grid-timer.png)
+   * Updates each quadrant in-place without destroying/recreating existing tomato DOM nodes
+   * so other tomatoes never flash or reload when clicking or editing on the grid.
    */
   renderGridScreen() {
     this.state.timers.forEach((slot, qIdx) => {
@@ -4786,36 +4788,82 @@ export class FableFlowApp {
       );
       const isDropdownOpen = this.state.openDropdownQuadrant === qIdx;
 
-      quadEl.innerHTML = '';
+      // Build persistent quadrant DOM once per quadrant
+      if (!quadEl._tomatoWrap) {
+        quadEl.innerHTML = '';
 
-      const tomatoWrap = document.createElement('div');
-      tomatoWrap.className = 'grid-tomato-wrap';
+        const tomatoWrap = document.createElement('div');
+        tomatoWrap.className = 'grid-tomato-wrap';
 
-      if (isAssigned && isCompleted && !slot._justTransitionedSilver) {
-        tomatoWrap.classList.add('is-silver-completed');
-      } else if (isAssigned && !isCompleted && slot._justTransitionedFromSilver) {
-        tomatoWrap.classList.add('is-silver-completed');
-      }
+        const baseImg = document.createElement('img');
+        baseImg.className = 'grid-tomato-img grid-tomato-base-img';
+        baseImg.decoding = 'sync';
+        tomatoWrap.appendChild(baseImg);
 
-      const img = document.createElement('img');
-      img.className = 'grid-tomato-img grid-tomato-base-img';
-      img.src = imgDataUrl;
-      img.alt = isAssigned
-        ? `${shortTitleText} Tomato Timer`
-        : 'Unassigned Tomato Timer';
-      tomatoWrap.appendChild(img);
-
-      if (isAssigned) {
         const silverImg = document.createElement('img');
         silverImg.className = 'grid-tomato-img grid-tomato-silver-img';
+        silverImg.decoding = 'sync';
         silverImg.src = silverImgDataUrl;
         silverImg.alt = '';
         silverImg.setAttribute('aria-hidden', 'true');
         tomatoWrap.appendChild(silverImg);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'grid-tomato-overlay';
+        tomatoWrap.appendChild(overlay);
+
+        tomatoWrap.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const curSlot = this.state.timers[qIdx];
+          const curAssigned = Boolean(curSlot && (curSlot.assignedTaskId || curSlot.customTitle));
+          if (curAssigned) {
+            this.state.openDropdownQuadrant = null;
+            this.state.selectedQuadrant = qIdx;
+            this.state.timerSubMode = 'hero';
+            this.saveState();
+            this.renderAll();
+          } else {
+            this.state.openDropdownQuadrant =
+              this.state.openDropdownQuadrant === qIdx ? null : qIdx;
+            this.renderGridScreen();
+          }
+        });
+
+        const controlsRow = document.createElement('div');
+        controlsRow.className = 'grid-controls-row';
+
+        quadEl.appendChild(tomatoWrap);
+        quadEl.appendChild(controlsRow);
+
+        quadEl._tomatoWrap = tomatoWrap;
+        quadEl._baseImg = baseImg;
+        quadEl._silverImg = silverImg;
+        quadEl._overlay = overlay;
+        quadEl._controlsRow = controlsRow;
       }
 
+      const tomatoWrap = quadEl._tomatoWrap;
+      const baseImg = quadEl._baseImg;
+      const overlay = quadEl._overlay;
+      const controlsRow = quadEl._controlsRow;
+
+      // Only update baseImg.src when paletteKey actually changes so the image never re-decodes/flashes
+      const paletteKeyStr = String(paletteKey);
+      if (baseImg.dataset.paletteKey !== paletteKeyStr) {
+        baseImg.dataset.paletteKey = paletteKeyStr;
+        baseImg.src = imgDataUrl;
+      }
+      const nextAlt = isAssigned
+        ? `${shortTitleText} Tomato Timer`
+        : 'Unassigned Tomato Timer';
+      if (baseImg.alt !== nextAlt) {
+        baseImg.alt = nextAlt;
+      }
+
+      // Smoothly transition or maintain silver completion state without resetting unchanged tomatoes
       if (slot._justTransitionedSilver) {
         slot._justTransitionedSilver = false;
+        tomatoWrap.classList.remove('is-silver-completed');
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             tomatoWrap.classList.add('is-silver-completed');
@@ -4823,117 +4871,156 @@ export class FableFlowApp {
         });
       } else if (slot._justTransitionedFromSilver) {
         slot._justTransitionedFromSilver = false;
+        tomatoWrap.classList.add('is-silver-completed');
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             tomatoWrap.classList.remove('is-silver-completed');
           });
         });
+      } else {
+        tomatoWrap.classList.toggle('is-silver-completed', Boolean(isAssigned && isCompleted));
       }
 
-      const overlay = document.createElement('div');
-      overlay.className = 'grid-tomato-overlay';
-
+      // Update overlay in-place
       if (isAssigned) {
         tomatoWrap.title = this.t('Tap tomato body to open Hero Timer; tap title text to edit/reassign');
-
-        const titleEl = document.createElement('div');
-        titleEl.className = 'grid-tomato-title';
-        titleEl.title = this.t('Tap title to edit or reassign task');
-        titleEl.textContent = shortTitleText;
-        titleEl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.state.openDropdownQuadrant =
-            this.state.openDropdownQuadrant === qIdx ? null : qIdx;
-          this.renderGridScreen();
-        });
-
-        const timeEl = document.createElement('div');
-        timeEl.className = 'grid-tomato-time';
-        timeEl.classList.toggle('has-hours', slot.remainingSeconds > 3600);
-        timeEl.textContent = readoutText;
-
-        overlay.appendChild(titleEl);
-        overlay.appendChild(timeEl);
-
-        tomatoWrap.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.state.openDropdownQuadrant = null;
-          this.state.selectedQuadrant = qIdx;
-          this.state.timerSubMode = 'hero';
-          this.saveState();
-          this.renderAll();
-        });
-      } else {
-        tomatoWrap.title = this.t('Tap to assign a task to this tomato');
-        if (!isDropdownOpen) {
-          const tapLabel = document.createElement('div');
-          tapLabel.className = 'grid-tap-to-assign';
-          tapLabel.textContent = this.t('Tap to assign');
-          overlay.appendChild(tapLabel);
+        if (overlay._tapLabel) {
+          overlay._tapLabel.remove();
+          overlay._tapLabel = null;
+        }
+        if (!overlay._titleEl) {
+          const titleEl = document.createElement('div');
+          titleEl.className = 'grid-tomato-title';
+          titleEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.state.openDropdownQuadrant =
+              this.state.openDropdownQuadrant === qIdx ? null : qIdx;
+            this.renderGridScreen();
+          });
+          overlay.appendChild(titleEl);
+          overlay._titleEl = titleEl;
+        }
+        overlay._titleEl.title = this.t('Tap title to edit or reassign task');
+        if (overlay._titleEl.textContent !== shortTitleText) {
+          overlay._titleEl.textContent = shortTitleText;
         }
 
-        tomatoWrap.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.state.openDropdownQuadrant =
-            this.state.openDropdownQuadrant === qIdx ? null : qIdx;
-          this.renderGridScreen();
-        });
+        if (!overlay._timeEl) {
+          const timeEl = document.createElement('div');
+          timeEl.className = 'grid-tomato-time';
+          overlay.appendChild(timeEl);
+          overlay._timeEl = timeEl;
+        }
+        overlay._timeEl.classList.toggle('has-hours', slot.remainingSeconds > 3600);
+        if (overlay._timeEl.textContent !== readoutText) {
+          overlay._timeEl.textContent = readoutText;
+        }
+      } else {
+        tomatoWrap.title = this.t('Tap to assign a task to this tomato');
+        if (overlay._titleEl) {
+          overlay._titleEl.remove();
+          overlay._titleEl = null;
+        }
+        if (overlay._timeEl) {
+          overlay._timeEl.remove();
+          overlay._timeEl = null;
+        }
+        if (!isDropdownOpen) {
+          if (!overlay._tapLabel) {
+            const tapLabel = document.createElement('div');
+            tapLabel.className = 'grid-tap-to-assign';
+            overlay.appendChild(tapLabel);
+            overlay._tapLabel = tapLabel;
+          }
+          const tapText = this.t('Tap to assign');
+          if (overlay._tapLabel.textContent !== tapText) {
+            overlay._tapLabel.textContent = tapText;
+          }
+        } else if (overlay._tapLabel) {
+          overlay._tapLabel.remove();
+          overlay._tapLabel = null;
+        }
       }
 
-      tomatoWrap.appendChild(overlay);
-
+      // Update task assignment dropdown on this quadrant only
+      const existingDropdown = tomatoWrap.querySelector('.task-assign-dropdown');
+      if (existingDropdown) {
+        existingDropdown.remove();
+      }
       if (isDropdownOpen) {
         const dropdown = this.buildTaskDropdownDOM(qIdx);
         tomatoWrap.appendChild(dropdown);
       }
 
-      quadEl.appendChild(tomatoWrap);
-
-      const controlsRow = document.createElement('div');
-      controlsRow.className = 'grid-controls-row';
-
+      // Update controls row in-place
       if (isAssigned) {
-        const playPauseBtn = document.createElement('button');
-        playPauseBtn.type = 'button';
-        playPauseBtn.className = 'grid-ctrl-btn';
+        if (!controlsRow._playPauseBtn) {
+          const playPauseBtn = document.createElement('button');
+          playPauseBtn.type = 'button';
+          playPauseBtn.className = 'grid-ctrl-btn';
+          playPauseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.togglePlayPause(qIdx);
+          });
+          controlsRow._playPauseBtn = playPauseBtn;
+        }
+        const playPauseBtn = controlsRow._playPauseBtn;
+        const isRunning = slot.runState === 'running';
         playPauseBtn.setAttribute(
           'aria-label',
-          slot.runState === 'running' ? this.t('Pause Timer') : this.t('Start Timer')
+          isRunning ? this.t('Pause Timer') : this.t('Start Timer')
         );
-        playPauseBtn.innerHTML =
-          slot.runState === 'running'
+        const desiredPlayState = isRunning ? 'running' : 'idle';
+        if (playPauseBtn.dataset.iconState !== desiredPlayState) {
+          playPauseBtn.dataset.iconState = desiredPlayState;
+          playPauseBtn.innerHTML = isRunning
             ? `<svg width="20" height="24" viewBox="0 0 24 28"><rect x="3" y="2" width="6.5" height="24" rx="1.5" fill="#0F0F0F"/><rect x="14.5" y="2" width="6.5" height="24" rx="1.5" fill="#0F0F0F"/></svg>`
             : `<svg width="20" height="24" viewBox="0 0 24 28"><path d="M4 2.5 L22 14 L4 25.5 Z" fill="#0F0F0F" stroke="#0F0F0F" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-        playPauseBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.togglePlayPause(qIdx);
-        });
+        }
+        if (playPauseBtn.parentElement !== controlsRow) {
+          controlsRow.appendChild(playPauseBtn);
+        }
 
-        const stopBtn = document.createElement('button');
-        stopBtn.type = 'button';
-        stopBtn.className = 'grid-ctrl-btn';
-        stopBtn.setAttribute(
-          'aria-label',
-          isCompleted ? this.t('Reset Timer to 00:00') : this.t('End Timer (Turn Silver Metallic)')
-        );
-        stopBtn.title = isCompleted
-          ? this.t('Reset Tomato Timer to 00:00')
-          : this.t('End Timer (Turns tomato Silver Metallic without clearing)');
-        stopBtn.innerHTML = isCompleted
-          ? `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M4.8 9.8C6.2 6.1 9.8 3.6 13.8 3.6C18.9 3.6 22.4 7.8 22.4 12.6C22.4 17.6 18.4 21.4 13.5 21.4C9.5 21.4 6.1 18.9 4.9 15.3" stroke="#0F0F0F" stroke-width="2.3" stroke-linecap="round"/><path d="M3.5 4.5V10.3H9.3" stroke="#0F0F0F" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-          : `<svg width="20" height="20" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.5" fill="#0F0F0F"/></svg>`;
-        stopBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.handleEndOrResetButton(qIdx);
-        });
-
-        controlsRow.appendChild(playPauseBtn);
         if (this.isTimerSlotSet(slot)) {
-          controlsRow.appendChild(stopBtn);
+          if (!controlsRow._stopBtn) {
+            const stopBtn = document.createElement('button');
+            stopBtn.type = 'button';
+            stopBtn.className = 'grid-ctrl-btn';
+            stopBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.handleEndOrResetButton(qIdx);
+            });
+            controlsRow._stopBtn = stopBtn;
+          }
+          const stopBtn = controlsRow._stopBtn;
+          stopBtn.setAttribute(
+            'aria-label',
+            isCompleted ? this.t('Reset Timer to 00:00') : this.t('End Timer (Turn Silver Metallic)')
+          );
+          stopBtn.title = isCompleted
+            ? this.t('Reset Tomato Timer to 00:00')
+            : this.t('End Timer (Turns tomato Silver Metallic without clearing)');
+          const desiredStopState = isCompleted ? 'completed' : 'active';
+          if (stopBtn.dataset.iconState !== desiredStopState) {
+            stopBtn.dataset.iconState = desiredStopState;
+            stopBtn.innerHTML = isCompleted
+              ? `<svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M4.8 9.8C6.2 6.1 9.8 3.6 13.8 3.6C18.9 3.6 22.4 7.8 22.4 12.6C22.4 17.6 18.4 21.4 13.5 21.4C9.5 21.4 6.1 18.9 4.9 15.3" stroke="#0F0F0F" stroke-width="2.3" stroke-linecap="round"/><path d="M3.5 4.5V10.3H9.3" stroke="#0F0F0F" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+              : `<svg width="20" height="20" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.5" fill="#0F0F0F"/></svg>`;
+          }
+          if (stopBtn.parentElement !== controlsRow) {
+            controlsRow.appendChild(stopBtn);
+          }
+        } else if (controlsRow._stopBtn && controlsRow._stopBtn.parentElement === controlsRow) {
+          controlsRow._stopBtn.remove();
+        }
+      } else {
+        if (controlsRow._playPauseBtn && controlsRow._playPauseBtn.parentElement === controlsRow) {
+          controlsRow._playPauseBtn.remove();
+        }
+        if (controlsRow._stopBtn && controlsRow._stopBtn.parentElement === controlsRow) {
+          controlsRow._stopBtn.remove();
         }
       }
-
-      quadEl.appendChild(controlsRow);
     });
   }
 

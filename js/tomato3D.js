@@ -1503,6 +1503,23 @@ export class HeroTomato3DView {
 }
 
 export class GridTomatoRenderer {
+  constructor() {
+    this._preloadedImages = [];
+    if (typeof Image !== 'undefined') {
+      const urls = new Set();
+      Object.values(HEIRLOOM_PALETTE).forEach((entry) => {
+        if (entry && entry.gridImg) urls.add(entry.gridImg);
+        if (entry && entry.miniImg) urls.add(entry.miniImg);
+      });
+      urls.forEach((url) => {
+        const img = new Image();
+        img.decoding = 'sync';
+        img.src = url;
+        this._preloadedImages.push(img);
+      });
+    }
+  }
+
   getDataURL(paletteKey) {
     if (paletteKey === 'unassigned' || paletteKey === 'unassignedDark' || paletteKey === 'unassignedLight') {
       return HEIRLOOM_PALETTE.unassigned.gridImg;
