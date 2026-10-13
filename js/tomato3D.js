@@ -10,7 +10,7 @@
  *   at the physical silhouette horizon instead of fading out unnaturally.
  */
 
-import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261013_v65';
+import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261013_v66';
 
 export const HEIRLOOM_PALETTE = {
   0: {
@@ -324,7 +324,11 @@ export class HeroTomato3DView {
       img.src = entry.heroImg;
       img.onload = () => {
         this.images.set(k, img);
-        this.render();
+        const heroEl =
+          typeof document !== 'undefined' ? document.getElementById('screen-hero') : null;
+        if (!heroEl || !heroEl.classList.contains('hidden')) {
+          this.render();
+        }
         if (this.images.size === keys.length) this._warmUpTwist();
       };
     });
@@ -346,6 +350,12 @@ export class HeroTomato3DView {
       () => this._topReady('unassigned'),
     ];
     const runNext = () => {
+      const aboutEl =
+        typeof document !== 'undefined' ? document.getElementById('about-modal-overlay') : null;
+      if (aboutEl && !aboutEl.classList.contains('hidden')) {
+        setTimeout(() => idle(runNext), 1200);
+        return;
+      }
       const step = steps.shift();
       if (!step) return;
       try {
@@ -1484,7 +1494,7 @@ export class HeroTomato3DView {
 
   /** Draws colour `key` with its top half turned by thetaDeg (ctx in 1x sprite units). */
   _drawSpriteWithTop(ctx, key, img, thetaDeg) {
-    const heroEl = typeof document !== 'undefined' ? document.getElementById('screen-timer-hero') : null;
+    const heroEl = typeof document !== 'undefined' ? document.getElementById('screen-hero') : null;
     const heroVisible = !heroEl || !heroEl.classList.contains('hidden');
     if ((heroVisible || this._top3D || Math.abs(thetaDeg) > 0.01) && this._topReady(key)) {
       const top = this._top3D;

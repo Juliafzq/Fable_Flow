@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v65';
-import { CardGestureMath } from './cardGestureMath.js?v=20261013_v65';
-import { SensoryEngine } from './sensoryEngine.js?v=20261013_v65';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v65';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v65';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v66';
+import { CardGestureMath } from './cardGestureMath.js?v=20261013_v66';
+import { SensoryEngine } from './sensoryEngine.js?v=20261013_v66';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v66';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v66';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261013_v65';
+} from './i18n.js?v=20261013_v66';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -78,6 +78,9 @@ export class FableFlowApp {
     const silenceTimerBell = () => this.sensory.stopCompletionAlarm();
     window.addEventListener('pointerdown', silenceTimerBell, { capture: true, passive: true });
     window.addEventListener('keydown', silenceTimerBell, { capture: true });
+    if (!this.state.hasCompletedOnboarding) {
+      this.state.activePillar = 'home';
+    }
     this.renderAll();
     this.initFirstTimeOnboarding();
     if (this.supabaseSync.isLoggedIn()) {
@@ -1446,13 +1449,6 @@ export class FableFlowApp {
         window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1')
     ) {
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        window.location.reload();
-      });
-
       navigator.serviceWorker
         .register('./sw.js', { updateViaCache: 'none' })
         .then((reg) => {
@@ -1930,7 +1926,26 @@ export class FableFlowApp {
     this.state.isCardFlipped = !this.state.isCardFlipped;
     this.sensory.playCardFlipSwoosh();
     this.saveState();
-    this.renderCardScreen();
+    this.applyCard3DRotation(
+      this.els.card3DWrapper,
+      this.state.isCardFlipped,
+      this._todayFlipDeg
+    );
+    if (this.els.demoBtnCard) {
+      this.els.demoBtnCard.classList.toggle(
+        'active-pill',
+        this.state.activePillar === 'card' && !this.state.isCardFlipped
+      );
+    }
+    if (this.els.demoBtnBack) {
+      this.els.demoBtnBack.classList.toggle(
+        'active-pill',
+        this.state.activePillar === 'card' && Boolean(this.state.isCardFlipped)
+      );
+    }
+    if (this.state.isCardFlipped && this.els.cardBackReflection) {
+      this.adjustReflectionTypography(this.els.cardBackReflection);
+    }
     this.redrawStrikesAfterFlip(this.els.card3DWrapper, this.els.taskListContainer);
     this.checkFirstTimePageHint();
   }
@@ -1970,7 +1985,14 @@ export class FableFlowApp {
     this.state.isStackCardFlipped = !this.state.isStackCardFlipped;
     this.sensory.playCardFlipSwoosh();
     this.saveState();
-    this.renderStackScreen();
+    this.applyCard3DRotation(
+      this.els.stackCard3D,
+      this.state.isStackCardFlipped,
+      this._stackFlipDeg
+    );
+    if (this.state.isStackCardFlipped && this.els.stackCardBackReflection) {
+      this.adjustReflectionTypography(this.els.stackCardBackReflection);
+    }
     this.redrawStrikesAfterFlip(this.els.stackCard3D, this.els.stackTaskListContainer);
     this.checkFirstTimePageHint();
   }
@@ -3561,12 +3583,39 @@ export class FableFlowApp {
     this.saveState();
     if (this.state.activePillar === 'timer') {
       if (this.state.timerSubMode === 'hero') {
-        this.renderHeroScreen();
+        if (completed.length) {
+          this.renderHeroScreen();
+        } else {
+          this.updateHeroTimerInPlace();
+        }
       } else if (completed.length) {
         this.renderGridScreen();
       } else {
         this.updateGridTimersInPlace();
       }
+    }
+  }
+
+  updateHeroTimerInPlace() {
+    const slot =
+      this.state.timers[this.state.selectedQuadrant] || this.state.timers[0];
+    if (!slot) return;
+    const nextReadout = OdometerDialPhysics.formatMockupReadout(slot.remainingSeconds);
+    if (this.els.heroReadout) {
+      if (this.els.heroReadout.textContent !== nextReadout) {
+        this.els.heroReadout.textContent = nextReadout;
+      }
+      this.els.heroReadout.classList.toggle('has-hours', slot.remainingSeconds > 3600);
+    }
+    const isAssigned = Boolean(slot.assignedTaskId || slot.customTitle);
+    const isCompleted = slot.runState === 'completed';
+    if (this.hero3D) {
+      this.hero3D.updateOdometer(
+        slot.angleDegrees,
+        slot.quadrant,
+        isAssigned,
+        isCompleted
+      );
     }
   }
 
@@ -4063,75 +4112,147 @@ export class FableFlowApp {
     );
 
     const container = this.els.taskListContainer;
-    container.innerHTML = '';
+    const existingRowsById = new Map();
+    Array.from(container.children).forEach((child) => {
+      if (
+        child.classList.contains('task-row') &&
+        child.dataset.taskId &&
+        !child.classList.contains('is-inline-editing') &&
+        !child.classList.contains('task-row-inline-adding') &&
+        !child.querySelector('.task-inline-input')
+      ) {
+        existingRowsById.set(child.dataset.taskId, child);
+      }
+    });
 
     const totalTasks = this.state.tasks.length;
     const rowVertPad = 9;
+    const desiredRows = [];
 
     this.state.tasks.forEach((task, idx) => {
       task.orderIndex = idx + 1;
-      const row = document.createElement('div');
-      row.className = 'task-row';
-      row.dataset.taskId = task.id;
-      row.dataset.completed = task.isCompleted ? 'true' : 'false';
-      row.style.paddingTop = `${rowVertPad}px`;
-      row.style.paddingBottom = `${rowVertPad}px`;
-
       const fontSizePx = this.computeTaskFontSizePx(task.title, totalTasks);
-
-      const numSpan = document.createElement('span');
-      numSpan.className = 'task-index';
-      numSpan.style.fontSize = `${fontSizePx}px`;
-      numSpan.textContent = String(task.orderIndex).padStart(2, '0');
-
-      const titleWrap = document.createElement('div');
-      titleWrap.className = 'task-title-wrap';
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'task-title';
-      titleSpan.style.fontSize = `${fontSizePx}px`;
-      titleSpan.textContent = this.displayTaskTitle(task.title);
-      titleWrap.appendChild(titleSpan);
-
-      const strikeCanvas = document.createElement('canvas');
-      strikeCanvas.className = 'pencil-strike-canvas';
-      strikeCanvas.width = 720;
-      strikeCanvas.height = 120;
-
-      const tomatoBtn = document.createElement('button');
-      tomatoBtn.className = 'task-tomato-btn';
-      tomatoBtn.type = 'button';
       const isLit =
         task.assignedQuadrant !== null && task.assignedQuadrant !== undefined;
-      tomatoBtn.title = isLit
-        ? this.t('Open this tomato timer')
-        : this.t('Click grey tomato to light up and open Timer page');
-
-      const miniImg = document.createElement('img');
-      miniImg.className = 'task-mini-tomato-img';
       const assignedSlot = isLit ? this.state.timers[task.assignedQuadrant] : null;
       const miniPaletteKey = !isLit
         ? 'unassigned'
         : assignedSlot && assignedSlot.runState === 'completed'
         ? 'completed'
         : task.assignedQuadrant;
-      miniImg.src = this.gridRenderer.getMiniDataURL(miniPaletteKey);
-      miniImg.alt = isLit ? this.t('Assigned Tomato') : this.t('Unassigned Grey Tomato');
-      tomatoBtn.appendChild(miniImg);
+      const miniPaletteKeyStr = String(miniPaletteKey);
+      const nextIndexText = String(task.orderIndex).padStart(2, '0');
+      const nextTitleText = this.displayTaskTitle(task.title);
+      const nextCompleted = task.isCompleted ? 'true' : 'false';
+      const nextBtnTitle = isLit
+        ? this.t('Open this tomato timer')
+        : this.t('Click grey tomato to light up and open Timer page');
+      const nextImgAlt = isLit
+        ? this.t('Assigned Tomato')
+        : this.t('Unassigned Grey Tomato');
 
-      tomatoBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.handleCardTaskTomatoClick(task);
-      });
+      let row = existingRowsById.get(task.id);
+      if (row) {
+        existingRowsById.delete(task.id);
+        row._taskRef = task;
+        row.dataset.completed = nextCompleted;
+        row.style.paddingTop = `${rowVertPad}px`;
+        row.style.paddingBottom = `${rowVertPad}px`;
 
-      row.appendChild(numSpan);
-      row.appendChild(titleWrap);
-      row.appendChild(strikeCanvas);
-      row.appendChild(tomatoBtn);
+        const numSpan = row.querySelector('.task-index');
+        if (numSpan) {
+          numSpan.style.fontSize = `${fontSizePx}px`;
+          if (numSpan.textContent !== nextIndexText) {
+            numSpan.textContent = nextIndexText;
+          }
+        }
+        const titleSpan = row.querySelector('.task-title');
+        if (titleSpan) {
+          titleSpan.style.fontSize = `${fontSizePx}px`;
+          if (titleSpan.textContent !== nextTitleText) {
+            titleSpan.textContent = nextTitleText;
+          }
+        }
+        const tomatoBtn = row.querySelector('.task-tomato-btn');
+        if (tomatoBtn && tomatoBtn.title !== nextBtnTitle) {
+          tomatoBtn.title = nextBtnTitle;
+        }
+        const miniImg = row.querySelector('.task-mini-tomato-img');
+        if (miniImg) {
+          if (miniImg.dataset.paletteKey !== miniPaletteKeyStr) {
+            miniImg.dataset.paletteKey = miniPaletteKeyStr;
+            miniImg.src = this.gridRenderer.getMiniDataURL(miniPaletteKey);
+          }
+          if (miniImg.alt !== nextImgAlt) {
+            miniImg.alt = nextImgAlt;
+          }
+        }
+      } else {
+        row = document.createElement('div');
+        row.className = 'task-row';
+        row.dataset.taskId = task.id;
+        row.dataset.completed = nextCompleted;
+        row.style.paddingTop = `${rowVertPad}px`;
+        row.style.paddingBottom = `${rowVertPad}px`;
+        row._taskRef = task;
 
-      container.appendChild(row);
+        const numSpan = document.createElement('span');
+        numSpan.className = 'task-index';
+        numSpan.style.fontSize = `${fontSizePx}px`;
+        numSpan.textContent = nextIndexText;
 
-      this.bindTaskRowPencilGesture(row, task, strikeCanvas, false);
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'task-title-wrap';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'task-title';
+        titleSpan.style.fontSize = `${fontSizePx}px`;
+        titleSpan.textContent = nextTitleText;
+        titleWrap.appendChild(titleSpan);
+
+        const strikeCanvas = document.createElement('canvas');
+        strikeCanvas.className = 'pencil-strike-canvas';
+        strikeCanvas.width = 720;
+        strikeCanvas.height = 120;
+
+        const tomatoBtn = document.createElement('button');
+        tomatoBtn.className = 'task-tomato-btn';
+        tomatoBtn.type = 'button';
+        tomatoBtn.title = nextBtnTitle;
+
+        const miniImg = document.createElement('img');
+        miniImg.className = 'task-mini-tomato-img';
+        miniImg.decoding = 'sync';
+        miniImg.dataset.paletteKey = miniPaletteKeyStr;
+        miniImg.src = this.gridRenderer.getMiniDataURL(miniPaletteKey);
+        miniImg.alt = nextImgAlt;
+        tomatoBtn.appendChild(miniImg);
+
+        tomatoBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.handleCardTaskTomatoClick(row._taskRef || task);
+        });
+
+        row.appendChild(numSpan);
+        row.appendChild(titleWrap);
+        row.appendChild(strikeCanvas);
+        row.appendChild(tomatoBtn);
+
+        this.bindTaskRowPencilGesture(row, task, strikeCanvas, false);
+      }
+      desiredRows.push(row);
+    });
+
+    // Reconcile container children in-place without destroying reused rows
+    Array.from(container.children).forEach((child) => {
+      if (!desiredRows.includes(child)) {
+        child.remove();
+      }
+    });
+    desiredRows.forEach((row, idx) => {
+      if (container.children[idx] !== row) {
+        container.insertBefore(row, container.children[idx] || null);
+      }
     });
 
     this.els.addItemRow.classList.remove('add-row-reserved');
@@ -4167,7 +4288,6 @@ export class FableFlowApp {
 
   renderPhotoSlotsDOM(containerEl, photosArray, targetType) {
     if (!containerEl) return;
-    containerEl.innerHTML = '';
 
     const photos = Array.isArray(photosArray) ? photosArray.slice(0, 2) : [];
     const isStackViewMode = targetType === 'stack' && !this.state.isStackEditMode;
@@ -4175,6 +4295,8 @@ export class FableFlowApp {
 
     // 1. If 0 photos on a Past Card when NOT in Edit mode: hide photo boxes completely
     if (photos.length === 0 && isStackViewMode) {
+      containerEl._photoSig = null;
+      if (containerEl.firstChild) containerEl.innerHTML = '';
       containerEl.classList.add('hidden');
       containerEl.classList.remove('empty-photos', 'single-photo-expanded');
       if (bodyEl) bodyEl.classList.remove('single-photo-layout');
@@ -4190,6 +4312,13 @@ export class FableFlowApp {
     if (bodyEl) {
       bodyEl.classList.toggle('single-photo-layout', expandSinglePhoto);
     }
+
+    const photoSig = `${targetType}|${isStackViewMode ? 1 : 0}|${this.state.language || 'en'}|${photos.join('||')}`;
+    if (containerEl._photoSig === photoSig && containerEl.children.length > 0) {
+      return;
+    }
+    containerEl._photoSig = photoSig;
+    containerEl.innerHTML = '';
 
     if (photos.length === 0) {
       const addSlot = document.createElement('div');
@@ -4217,6 +4346,7 @@ export class FableFlowApp {
 
       const img = document.createElement('img');
       img.className = 'journal-photo-img';
+      img.decoding = 'sync';
       img.src = photoSrc;
       img.alt = `Evening journal memory photo ${idx + 1}`;
       slot.appendChild(img);
@@ -4460,49 +4590,104 @@ export class FableFlowApp {
     }
 
     const listEl = this.els.stackTaskListContainer;
-    listEl.innerHTML = '';
+    const existingStackRowsById = new Map();
+    if (listEl._renderedDateKey === selectedCard.dateKey) {
+      Array.from(listEl.children).forEach((child) => {
+        if (
+          child.classList.contains('task-row') &&
+          child.dataset.taskId &&
+          !child.classList.contains('is-inline-editing') &&
+          !child.classList.contains('task-row-inline-adding') &&
+          !child.querySelector('.task-inline-input')
+        ) {
+          existingStackRowsById.set(child.dataset.taskId, child);
+        }
+      });
+    } else {
+      listEl.innerHTML = '';
+    }
+    listEl._renderedDateKey = selectedCard.dateKey;
 
     const stackTasks = selectedCard.tasks || [];
     const totalTasks = stackTasks.length;
     const rowVertPad = 9;
+    const desiredStackRows = [];
 
     stackTasks.forEach((task, idx) => {
       task.orderIndex = idx + 1;
-      const row = document.createElement('div');
-      row.className = 'task-row';
-      row.dataset.taskId = task.id;
-      row.dataset.completed = task.isCompleted ? 'true' : 'false';
-      row.style.paddingTop = `${rowVertPad}px`;
-      row.style.paddingBottom = `${rowVertPad}px`;
-
       const fontSizePx = this.computeTaskFontSizePx(task.title, totalTasks);
+      const nextIndexText = String(task.orderIndex).padStart(2, '0');
+      const nextTitleText = this.displayTaskTitle(task.title);
+      const nextCompleted = task.isCompleted ? 'true' : 'false';
 
-      const numSpan = document.createElement('span');
-      numSpan.className = 'task-index';
-      numSpan.style.fontSize = `${fontSizePx}px`;
-      numSpan.textContent = String(task.orderIndex).padStart(2, '0');
+      let row = existingStackRowsById.get(task.id);
+      if (row) {
+        existingStackRowsById.delete(task.id);
+        row._taskRef = task;
+        row.dataset.completed = nextCompleted;
+        row.style.paddingTop = `${rowVertPad}px`;
+        row.style.paddingBottom = `${rowVertPad}px`;
 
-      const titleWrap = document.createElement('div');
-      titleWrap.className = 'task-title-wrap';
+        const numSpan = row.querySelector('.task-index');
+        if (numSpan) {
+          numSpan.style.fontSize = `${fontSizePx}px`;
+          if (numSpan.textContent !== nextIndexText) {
+            numSpan.textContent = nextIndexText;
+          }
+        }
+        const titleSpan = row.querySelector('.task-title');
+        if (titleSpan) {
+          titleSpan.style.fontSize = `${fontSizePx}px`;
+          if (titleSpan.textContent !== nextTitleText) {
+            titleSpan.textContent = nextTitleText;
+          }
+        }
+      } else {
+        row = document.createElement('div');
+        row.className = 'task-row';
+        row.dataset.taskId = task.id;
+        row.dataset.completed = nextCompleted;
+        row.style.paddingTop = `${rowVertPad}px`;
+        row.style.paddingBottom = `${rowVertPad}px`;
+        row._taskRef = task;
 
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'task-title';
-      titleSpan.style.fontSize = `${fontSizePx}px`;
-      titleSpan.textContent = this.displayTaskTitle(task.title);
-      titleWrap.appendChild(titleSpan);
+        const numSpan = document.createElement('span');
+        numSpan.className = 'task-index';
+        numSpan.style.fontSize = `${fontSizePx}px`;
+        numSpan.textContent = nextIndexText;
 
-      const strikeCanvas = document.createElement('canvas');
-      strikeCanvas.className = 'pencil-strike-canvas';
-      strikeCanvas.width = 720;
-      strikeCanvas.height = 120;
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'task-title-wrap';
 
-      row.appendChild(numSpan);
-      row.appendChild(titleWrap);
-      row.appendChild(strikeCanvas);
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'task-title';
+        titleSpan.style.fontSize = `${fontSizePx}px`;
+        titleSpan.textContent = nextTitleText;
+        titleWrap.appendChild(titleSpan);
 
-      listEl.appendChild(row);
+        const strikeCanvas = document.createElement('canvas');
+        strikeCanvas.className = 'pencil-strike-canvas';
+        strikeCanvas.width = 720;
+        strikeCanvas.height = 120;
 
-      this.bindTaskRowPencilGesture(row, task, strikeCanvas, true);
+        row.appendChild(numSpan);
+        row.appendChild(titleWrap);
+        row.appendChild(strikeCanvas);
+
+        this.bindTaskRowPencilGesture(row, task, strikeCanvas, true);
+      }
+      desiredStackRows.push(row);
+    });
+
+    Array.from(listEl.children).forEach((child) => {
+      if (!desiredStackRows.includes(child)) {
+        child.remove();
+      }
+    });
+    desiredStackRows.forEach((row, idx) => {
+      if (listEl.children[idx] !== row) {
+        listEl.insertBefore(row, listEl.children[idx] || null);
+      }
     });
 
     if (this.els.stackAddItemRow) {
@@ -4555,7 +4740,6 @@ export class FableFlowApp {
   renderCalendarScreen() {
     const container = this.els.calendarMonthsContainer;
     if (!container) return;
-    container.innerHTML = '';
 
     const fullMonthNames = [
       'JANUARY',
@@ -4583,6 +4767,26 @@ export class FableFlowApp {
     const minEndTotalMonths = 2026 * 12 + 11; // Dec 2026 (index 11)
     const dynamicEndTotalMonths = curYear * 12 + curMonthIdx + 2; // Always +2 months after current month
     const endTotalMonths = Math.max(minEndTotalMonths, dynamicEndTotalMonths);
+    const rangeSig = `${startTotalMonths}:${endTotalMonths}`;
+
+    if (container._calRangeSig === rangeSig && container.children.length > 0) {
+      container.querySelectorAll('.cal-day-btn').forEach((btn) => {
+        const dateKey = btn.dataset.dateKey;
+        if (!dateKey) return;
+        const hasArchivedCard = Boolean(this.state.archiveCards[dateKey]);
+        const isTodayCard = dateKey === activeDateKey;
+        const isSelected = dateKey === this.state.selectedStackDateKey;
+        const isFutureDate = dateKey > activeDateKey && !hasArchivedCard;
+        btn.classList.toggle('has-card', hasArchivedCard || isTodayCard);
+        btn.classList.toggle('is-today', isTodayCard);
+        btn.classList.toggle('is-selected', isSelected);
+        btn.classList.toggle('is-future', isFutureDate);
+      });
+      return;
+    }
+
+    container._calRangeSig = rangeSig;
+    container.innerHTML = '';
 
     const months = [];
     for (let totalM = startTotalMonths; totalM <= endTotalMonths; totalM++) {
@@ -4663,14 +4867,19 @@ export class FableFlowApp {
         }
 
         btn.addEventListener('click', () => {
-          if (isTodayCard) {
+          const curActiveDateKey =
+            this.state.cardDateKey || this.getCurrentLogicalDateString(this.state.dailyResetHour);
+          const curHasArchived = Boolean(this.state.archiveCards[dateKey]);
+          const curIsToday = dateKey === curActiveDateKey;
+          const curIsFuture = dateKey > curActiveDateKey && !curHasArchived;
+          if (curIsToday) {
             this.sensory.playCardFlipSwoosh();
             this.state.activePillar = 'card';
             this.state.isCardFlipped = false;
             this._todayFlipDeg = 0;
             this.saveState();
             this.renderAll();
-          } else if (isFutureDate) {
+          } else if (curIsFuture) {
             this.showTelemetryToast(this.t('Future date'));
           } else {
             this.sensory.playStackRiffleTick();
@@ -4824,6 +5033,7 @@ export class FableFlowApp {
   }
 
   bindTaskRowPencilGesture(rowEl, task, strikeCanvas, isStackCard = false) {
+    rowEl._taskRef = task;
     let startX = null;
     let startY = null;
     let isTracking = false;
@@ -4869,6 +5079,7 @@ export class FableFlowApp {
 
     rowEl.addEventListener('pointermove', (e) => {
       if (!isTracking || startX === null) return;
+      const curTask = rowEl._taskRef || task;
       const pt = this.getPointerXY(e);
       const dx = pt.x - startX;
       const dy = pt.y - startY;
@@ -4892,7 +5103,7 @@ export class FableFlowApp {
         rowEl.clientWidth || 280
       );
       if (progress > 0) {
-        if (!task.isCompleted) {
+        if (!curTask.isCompleted) {
           this.drawGraphiteStroke(strikeCanvas, 0.0, progress);
         } else {
           this.drawGraphiteStroke(strikeCanvas, progress, 1.0);
@@ -4902,6 +5113,7 @@ export class FableFlowApp {
 
     const finishGesture = (e) => {
       if (!isTracking || startX === null) return;
+      const curTask = rowEl._taskRef || task;
       e.stopPropagation();
       isTracking = false;
       try {
@@ -4921,7 +5133,7 @@ export class FableFlowApp {
       startY = null;
 
       if (Math.abs(dx) < 6 && Math.abs(dy) < 6) {
-        this.drawGraphiteStroke(strikeCanvas, 0.0, task.isCompleted ? 1.0 : 0.0);
+        this.drawGraphiteStroke(strikeCanvas, 0.0, curTask.isCompleted ? 1.0 : 0.0);
         if (!isStackCard || this.state.isStackEditMode) {
           // The touchend that follows must not produce iOS's delayed mousedown/click,
           // which would land on the freshly changed layout and steal focus.
@@ -4932,17 +5144,17 @@ export class FableFlowApp {
           rowEl._suppressCompatTimer = setTimeout(() => {
             rowEl._suppressCompatClick = false;
           }, 350);
-          this.startInlineEditTask(rowEl, task, isStackCard, true);
+          this.startInlineEditTask(rowEl, curTask, isStackCard, true);
         }
         return;
       }
 
       const gesture = CardGestureMath.classifyGesture(dx, dy, !startedAtLeftEdgeBezel);
       if (gesture === 'strikethrough') {
-        task.isCompleted = !task.isCompleted;
-        rowEl.dataset.completed = task.isCompleted ? 'true' : 'false';
-        this.sensory.playPencilStrikethrough(!task.isCompleted);
-        this.drawGraphiteStroke(strikeCanvas, 0.0, task.isCompleted ? 1.0 : 0.0);
+        curTask.isCompleted = !curTask.isCompleted;
+        rowEl.dataset.completed = curTask.isCompleted ? 'true' : 'false';
+        this.sensory.playPencilStrikethrough(!curTask.isCompleted);
+        this.drawGraphiteStroke(strikeCanvas, 0.0, curTask.isCompleted ? 1.0 : 0.0);
         this.saveState();
       } else if (
         gesture === 'flipCard' ||
@@ -4950,7 +5162,7 @@ export class FableFlowApp {
           Math.abs(dx) >= 22 &&
           Math.abs(dx) > Math.abs(dy) * 1.15)
       ) {
-        this.drawGraphiteStroke(strikeCanvas, 0.0, task.isCompleted ? 1.0 : 0.0);
+        this.drawGraphiteStroke(strikeCanvas, 0.0, curTask.isCompleted ? 1.0 : 0.0);
         const dir = dx >= 0 ? 1 : -1;
         if (isStackCard) {
           this.triggerStackCardFlip(dir);
@@ -4958,7 +5170,7 @@ export class FableFlowApp {
           this.triggerCardFlip(dir);
         }
       } else {
-        this.drawGraphiteStroke(strikeCanvas, 0.0, task.isCompleted ? 1.0 : 0.0);
+        this.drawGraphiteStroke(strikeCanvas, 0.0, curTask.isCompleted ? 1.0 : 0.0);
       }
     };
 
@@ -5305,11 +5517,15 @@ export class FableFlowApp {
     const slot =
       this.state.timers[this.state.selectedQuadrant] || this.state.timers[0];
 
-    this.els.heroReadout.textContent = OdometerDialPhysics.formatMockupReadout(
+    const nextReadout = OdometerDialPhysics.formatMockupReadout(
       slot.remainingSeconds
     );
+    if (this.els.heroReadout.textContent !== nextReadout) {
+      this.els.heroReadout.textContent = nextReadout;
+    }
     this.els.heroReadout.classList.toggle('has-hours', slot.remainingSeconds > 3600);
 
+    let nextSubtitle = '';
     if (slot.assignedTaskId || slot.customTitle) {
       const orderStr = String(slot.assignedTaskOrder || slot.quadrant + 1).padStart(
         2,
@@ -5320,27 +5536,33 @@ export class FableFlowApp {
         4,
         22
       );
-      this.els.heroSubtitle.textContent = `${orderStr} / ${shortTitle}`;
+      nextSubtitle = `${orderStr} / ${shortTitle}`;
     } else {
       const orderStr = String(slot.quadrant + 1).padStart(2, '0');
-      this.els.heroSubtitle.textContent = `${orderStr} / ${this.t('TAP TO ASSIGN')}`;
+      nextSubtitle = `${orderStr} / ${this.t('TAP TO ASSIGN')}`;
+    }
+    if (this.els.heroSubtitle.textContent !== nextSubtitle) {
+      this.els.heroSubtitle.textContent = nextSubtitle;
     }
 
     if (this.els.heroSyncToCardBtn) {
       const canSyncToCard = this.isSlotCustomUnlinkedTitle(slot);
       this.els.heroSyncToCardBtn.classList.toggle('hidden', !canSyncToCard);
       const syncLabel = this.els.heroSyncToCardBtn.querySelector('.hero-sync-to-card-label');
-      if (syncLabel) {
-        syncLabel.textContent = this.t('+ Card');
+      const nextSyncText = this.t('+ Card');
+      if (syncLabel && syncLabel.textContent !== nextSyncText) {
+        syncLabel.textContent = nextSyncText;
       }
     }
 
     if (this.els.heroSubtitleDropdownMount) {
-      this.els.heroSubtitleDropdownMount.innerHTML = '';
       if (this.state.isHeroDropdownOpen) {
+        this.els.heroSubtitleDropdownMount.innerHTML = '';
         this.els.heroSubtitleDropdownMount.appendChild(
           this.buildTaskDropdownDOM(slot.quadrant)
         );
+      } else if (this.els.heroSubtitleDropdownMount.firstChild) {
+        this.els.heroSubtitleDropdownMount.innerHTML = '';
       }
     }
 
@@ -5355,10 +5577,14 @@ export class FableFlowApp {
       );
     }
 
-    this.els.heroBtnPlayPause.innerHTML =
-      slot.runState === 'running'
-        ? `<svg width="36" height="44" viewBox="0 0 36 44"><rect x="4" y="2" width="10" height="40" rx="3" fill="#0F0F0F"/><rect x="22" y="2" width="10" height="40" rx="3" fill="#0F0F0F"/></svg>`
-        : `<svg width="36" height="44" viewBox="0 0 36 44"><path d="M6 3 L33 22 L6 41 Z" fill="#0F0F0F" stroke="#0F0F0F" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    const playIconState = slot.runState === 'running' ? 'running' : 'paused';
+    if (this.els.heroBtnPlayPause.dataset.iconState !== playIconState) {
+      this.els.heroBtnPlayPause.dataset.iconState = playIconState;
+      this.els.heroBtnPlayPause.innerHTML =
+        playIconState === 'running'
+          ? `<svg width="36" height="44" viewBox="0 0 36 44"><rect x="4" y="2" width="10" height="40" rx="3" fill="#0F0F0F"/><rect x="22" y="2" width="10" height="40" rx="3" fill="#0F0F0F"/></svg>`
+          : `<svg width="36" height="44" viewBox="0 0 36 44"><path d="M6 3 L33 22 L6 41 Z" fill="#0F0F0F" stroke="#0F0F0F" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    }
 
     if (this.els.heroBtnStop) {
       const isSet = this.isTimerSlotSet(slot);
@@ -5370,9 +5596,13 @@ export class FableFlowApp {
       this.els.heroBtnStop.title = isCompleted
         ? this.t('Reset Tomato Timer to 00:00')
         : this.t('End Timer (Turns tomato Silver Metallic without clearing)');
-      this.els.heroBtnStop.innerHTML = isCompleted
-        ? `<svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M7.5 14.5C9.5 9.2 14.6 5.5 20.5 5.5C28.2 5.5 33.5 11.8 33.5 18.8C33.5 26.2 27.6 31.8 20.2 31.8C14.2 31.8 9.2 28.1 7.4 22.8" stroke="#0F0F0F" stroke-width="3.0" stroke-linecap="round"/><path d="M5.5 6.8V15.2H13.9" stroke="#0F0F0F" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-        : `<svg width="36" height="36" viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" rx="4.5" fill="#0F0F0F"/></svg>`;
+      const stopIconState = isCompleted ? 'completed' : 'active';
+      if (this.els.heroBtnStop.dataset.iconState !== stopIconState) {
+        this.els.heroBtnStop.dataset.iconState = stopIconState;
+        this.els.heroBtnStop.innerHTML = isCompleted
+          ? `<svg width="36" height="36" viewBox="0 0 36 36" fill="none"><path d="M7.5 14.5C9.5 9.2 14.6 5.5 20.5 5.5C28.2 5.5 33.5 11.8 33.5 18.8C33.5 26.2 27.6 31.8 20.2 31.8C14.2 31.8 9.2 28.1 7.4 22.8" stroke="#0F0F0F" stroke-width="3.0" stroke-linecap="round"/><path d="M5.5 6.8V15.2H13.9" stroke="#0F0F0F" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          : `<svg width="36" height="36" viewBox="0 0 36 36"><rect x="3" y="3" width="30" height="30" rx="4.5" fill="#0F0F0F"/></svg>`;
+      }
     }
 
     this.els.heroBtnStopwatch.classList.toggle(
@@ -7179,8 +7409,10 @@ export class FableFlowApp {
     this.initAboutModalEvents();
 
     if (!this.state.hasCompletedOnboarding) {
-      this.state.activePillar = 'home';
-      this.renderAll();
+      if (this.state.activePillar !== 'home') {
+        this.state.activePillar = 'home';
+        this.renderAll();
+      }
       this.openAboutModal();
     } else {
       this.checkFirstTimePageHint();
@@ -7255,13 +7487,18 @@ export class FableFlowApp {
     // (whole letter readable in ~5s; v36 used ~1.55s steps, which felt too slow)
     const firstMs = 200;
     const stepMs = 700;
-    blocks.forEach((blockEl, idx) => {
-      const waitMs = firstMs + idx * stepMs;
-      const timerId = setTimeout(() => {
-        blockEl.classList.add('visible');
-      }, waitMs);
-      this._aboutTimers.push(timerId);
-    });
+    const revealStep = (idx) => {
+      if (idx >= blocks.length) return;
+      blocks[idx].classList.add('visible');
+      if (idx + 1 < blocks.length) {
+        const timerId = setTimeout(() => revealStep(idx + 1), stepMs);
+        this._aboutTimers.push(timerId);
+      }
+    };
+    if (blocks.length > 0) {
+      const firstId = setTimeout(() => revealStep(0), firstMs);
+      this._aboutTimers.push(firstId);
+    }
   }
 
   fitAboutCardTypography() {
