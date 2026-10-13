@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v57';
-import { CardGestureMath } from './cardGestureMath.js?v=20261013_v57';
-import { SensoryEngine } from './sensoryEngine.js?v=20261013_v57';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v57';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v57';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v58';
+import { CardGestureMath } from './cardGestureMath.js?v=20261013_v58';
+import { SensoryEngine } from './sensoryEngine.js?v=20261013_v58';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v58';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v58';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261013_v57';
+} from './i18n.js?v=20261013_v58';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -3439,21 +3439,55 @@ export class FableFlowApp {
   }
 
   /**
-   * One-shot wake-up at the exact moment the soonest running countdown reaches 00:00.
-   * Browsers throttle a hidden tab's 1 s ticker (down to once a minute), but a single fresh
-   * timeout armed from a user action or the "page hidden" event still fires on time, so the
-   * bell rings on time while you're on another tab or app (as long as the browser keeps the
-   * page running; a locked iPhone pauses web pages entirely).
+   * One-shot wake-up at the exact moment the soonest running countdown reaches 00:00,
+   * plus native iOS `UNUserNotificationCenter` scheduling when running inside the iPhone app wrapper
+   * so the bell rings on the Lock Screen or in other apps with zero battery drain or audio interruption.
    */
   armTimerDueAlarm() {
     if (this._dueTimeout) {
       clearTimeout(this._dueTimeout);
       this._dueTimeout = null;
     }
+    const nativeBridge =
+      typeof window !== 'undefined'
+        ? (window.webkit &&
+            window.webkit.messageHandlers &&
+            window.webkit.messageHandlers.untoNative) ||
+          window.__untoNativeBridge ||
+          null
+        : null;
+
     let soonest = Infinity;
     for (const slot of this.state.timers) {
-      if (slot.runState !== 'running' || slot.mode !== 'countdown' || !slot.lastTickTimestamp) continue;
-      soonest = Math.min(soonest, slot.lastTickTimestamp + slot.remainingSeconds * 1000);
+      const isRunningCountdown =
+        slot.runState === 'running' &&
+        slot.mode === 'countdown' &&
+        Boolean(slot.lastTickTimestamp) &&
+        slot.remainingSeconds > 0;
+      if (isRunningCountdown) {
+        const dueAt = slot.lastTickTimestamp + slot.remainingSeconds * 1000;
+        soonest = Math.min(soonest, dueAt);
+        if (nativeBridge && !(this.sensory && this.sensory.isSilentMode)) {
+          try {
+            const taskTitle = this.displayTaskTitle(slot.customTitle || this.t('Timer'));
+            nativeBridge.postMessage({
+              action: 'scheduleTimer',
+              slotIndex: slot.quadrant,
+              title: 'UNTO FLOW',
+              body: this.t('Timer completed: {title}', { title: taskTitle }),
+              endsAtMs: dueAt,
+            });
+          } catch (_) {}
+        } else if (nativeBridge) {
+          try {
+            nativeBridge.postMessage({ action: 'cancelTimer', slotIndex: slot.quadrant });
+          } catch (_) {}
+        }
+      } else if (nativeBridge) {
+        try {
+          nativeBridge.postMessage({ action: 'cancelTimer', slotIndex: slot.quadrant });
+        } catch (_) {}
+      }
     }
     if (!Number.isFinite(soonest)) return;
     const waitMs = Math.max(0, soonest - Date.now()) + 60;
@@ -3478,6 +3512,7 @@ export class FableFlowApp {
 
     this.sensory.playDialRatchetNotch(false);
     this.showTelemetryToast(this.t('Tomato reset to 00:00'));
+    this.armTimerDueAlarm();
 
     this.saveState();
     this.renderAll();
@@ -3507,6 +3542,7 @@ export class FableFlowApp {
       this.showTelemetryToast(this.t('Countdown mode'));
     }
     this.sensory.playDialRatchetNotch(true);
+    this.armTimerDueAlarm();
     this.saveState();
     this.renderAll();
   }
@@ -3542,6 +3578,7 @@ export class FableFlowApp {
     this.state.openDropdownQuadrant = null;
     this.state.isHeroDropdownOpen = false;
     this.sensory.playDialRatchetNotch(true);
+    this.armTimerDueAlarm();
     this.saveState();
     this.renderAll();
   }
@@ -3568,6 +3605,7 @@ export class FableFlowApp {
     this.state.openDropdownQuadrant = null;
     this.state.isHeroDropdownOpen = false;
     this.sensory.playDialRatchetNotch(true);
+    this.armTimerDueAlarm();
     this.saveState();
     this.renderAll();
   }

@@ -235,7 +235,16 @@ Either way: add the provider's DNS records (MX, SPF, DKIM), create `hello@` and 
 
 ## Phase 2 — Build the iOS app (weeks 1–4) 🤖 (you test on your iPhone)
 
-The web app is wrapped as a native iOS app with **Capacitor**, using the same code.
+### Free Pre-Launch iPhone Testing (Available Now — \$0 Apple ID)
+Before paying \$99/yr for the Apple Developer Program, you can install the native iOS wrapper (`FableFlow.xcodeproj`) directly onto your iPhone for free to get **real Lock-Screen / background timer chimes** (`bell_alarm.wav`) and **Taptic Engine dial clicks** with zero background battery drain and zero interference with music:
+1. On your Mac, open **`FableFlow.xcodeproj`** in **Xcode** (free from the Mac App Store).
+2. In Xcode → **Settings (⌘,)** → **Accounts**, click **+** and sign in with your regular Apple ID (creates a free *Personal Team*).
+3. Click **FableFlow** at the top of the left sidebar → **Signing & Capabilities** tab → select your **Personal Team**, and type any unique Bundle Identifier (e.g. `com.unto.flow.zuqi`).
+4. Plug your iPhone into your Mac, select your iPhone at the top of Xcode, and press **Run (▶ / ⌘R)**.
+5. On your iPhone (first time only): open **Settings → General → VPN & Device Management**, tap your Apple ID under *Developer App*, and tap **Trust**.
+6. Open **UNTO FLOW** on your iPhone and start a timer — tap **Allow** when iOS asks for notification permission. Even if you lock your phone or listen to music in another app, the 3-ring mechanical bell will chime right at `00:00`! *(Note: Apple's free personal signing lasts 7 days per plug-in; once you enroll in the \$99/yr program for TestFlight/App Store, that 7-day limit disappears.)*
+
+The web app is wrapped as a native iOS app, using the same code.
 
 | # | Task | Notes |
 |---|---|---|

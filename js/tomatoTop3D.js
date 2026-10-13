@@ -342,7 +342,13 @@ export class TomatoTop3D {
       }
       void main() {
         vec3 n = normalize(vNor);
-        vec3 col = texture(uMatcap, clamp(n.xy * 0.5 + 0.5, 0.0, 1.0)).rgb;
+        // surface grain + subtle organic skin variation + micro-normal bump, fixed to the body so they turn with it
+        float g = vnoise(vBody * 1.25) * 0.62 + vnoise(vBody * 2.8) * 0.38;
+        float gx = vnoise(vBody * 1.6 + vec3(4.1, 1.7, 8.3)) - 0.5;
+        float gy = vnoise(vBody * 1.6 + vec3(9.2, 6.4, 2.5)) - 0.5;
+        float m = vnoise(vBody * 0.055 + 7.3) * 0.58 + vnoise(vBody * 0.14 + 3.1) * 0.42;
+        vec2 nuv = clamp((n.xy + vec2(gx, gy) * (uGrain * 0.24)) * 0.5 + 0.5, 0.0, 1.0);
+        vec3 col = texture(uMatcap, nuv).rgb;
         // soft key-light shadow (only on surfaces that face the light; the matcap darkens the rest)
         vec3 sc = vLight * 0.5 + 0.5;
         float lit = 0.0;
@@ -354,9 +360,6 @@ export class TomatoTop3D {
         lit /= 9.0;
         float facing = smoothstep(0.04, 0.32, dot(n, uLw));
         float shade = mix(1.0, mix(1.0 - uShadowK, 1.0, lit), facing);
-        // surface grain + faint mottling, fixed to the body so they turn with it
-        float g = vnoise(vBody * 1.2) * 0.62 + vnoise(vBody * 2.7) * 0.38;
-        float m = vnoise(vBody * 0.045 + 7.3) * 0.6 + vnoise(vBody * 0.11 + 3.1) * 0.4;
         col *= shade * vAO * (1.0 + uGrain * (g - 0.5) * 2.0) * (1.0 + uMottle * (m - 0.5) * 2.0);
         float a = smoothstep(6.0, 13.0, seamY(vSprite.x) - vSprite.y);
         o = vec4(col * a, a);

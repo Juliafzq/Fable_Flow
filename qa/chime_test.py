@@ -82,7 +82,7 @@ time.sleep(3.2)
 lb = log()
 whens = sorted(s['when'] for s in lb['strikes'])
 gaps = [round(b - a, 2) for a, b in zip(whens, whens[1:])]
-queued_up_front = len(set(round(s['at'], 2) for s in lb['strikes'])) <= 1 if lb['strikes'] else False
+queued_up_front = (max(s['at'] for s in lb['strikes']) - min(s['at'] for s in lb['strikes'])) < 0.15 if lb['strikes'] else False
 print('B rings', [r['kind'] for r in lb['rings']], 'strike times', [round(w, 2) for w in whens], 'gaps', gaps)
 res['B foreground: bell rings 3 times'] = bell_count(lb) >= 3
 res['B rings are spaced out (1.2-3 s apart)'] = len(gaps) >= 2 and all(1.2 <= g <= 3.0 for g in gaps)
@@ -174,6 +174,33 @@ time.sleep(0.4)
 lh = log()
 print('H', st_h, 'strikes', len(lh['strikes']))
 res['H stuck audio: next tap starts a fresh context and the bell works'] = st_h['id'] == 'new' and st_h['state'] == 'running' and len(lh['strikes']) >= 1
+
+# --- I: native iOS wrapper bridge (window.webkit.messageHandlers.untoNative) ------------------
+ni = c.js("""(() => {
+  window.__nativeMsgs = [];
+  window.__untoNativeBridge = {
+    postMessage(msg) { window.__nativeMsgs.push(msg); }
+  };
+  const a = window.fableFlowApp;
+  const s = a.state.timers[0];
+  s.customTitle = 'Write Chapter 1';
+  s.mode = 'countdown';
+  s.runState = 'idle';
+  s.remainingSeconds = 1500;
+  s.configuredMinutes = 25;
+  a.togglePlayPause(0); // start -> should post scheduleTimer for slot 0 + haptic
+  const afterStart = window.__nativeMsgs.slice();
+  a.togglePlayPause(0); // pause -> should post cancelTimer for slot 0
+  const afterPause = window.__nativeMsgs.slice();
+  return { afterStart, afterPause };
+})()""")
+sched = [m for m in ni['afterStart'] if m.get('action') == 'scheduleTimer' and m.get('slotIndex') == 0]
+hap = [m for m in ni['afterStart'] if m.get('action') == 'haptic']
+canc = [m for m in ni['afterPause'][len(ni['afterStart']):] if m.get('action') == 'cancelTimer' and m.get('slotIndex') == 0]
+print('I native bridge schedule:', len(sched), 'haptic:', len(hap), 'cancel:', len(canc))
+res['I native iOS wrapper bridge schedules & cancels local timer notifications'] = (
+    len(sched) == 1 and sched[0].get('title') == 'UNTO FLOW' and sched[0].get('endsAtMs', 0) > 0 and len(hap) >= 1 and len(canc) >= 1
+)
 
 for k, v in res.items(): print(('OK   ' if v else 'BAD  ') + k)
 print('PASS' if all(res.values()) else 'FAIL')

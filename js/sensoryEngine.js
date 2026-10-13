@@ -120,7 +120,23 @@ export class SensoryEngine {
 
   _triggerHaptic(label, durationMs = 12) {
     let vibrated = false;
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    const nativeBridge =
+      typeof window !== 'undefined'
+        ? (window.webkit &&
+            window.webkit.messageHandlers &&
+            window.webkit.messageHandlers.untoNative) ||
+          window.__untoNativeBridge ||
+          null
+        : null;
+    if (nativeBridge && typeof nativeBridge.postMessage === 'function') {
+      try {
+        const style =
+          durationMs >= 20 ? 'complete' : durationMs >= 14 ? 'heavy' : durationMs >= 9 ? 'notch' : 'tick';
+        nativeBridge.postMessage({ action: 'haptic', style });
+        vibrated = true;
+      } catch (_) {}
+    }
+    if (!vibrated && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       try {
         vibrated = Boolean(navigator.vibrate(durationMs));
       } catch (_) {}
@@ -171,6 +187,7 @@ export class SensoryEngine {
    * Subtle clockwork escapement tick while a timer is actively running.
    */
   playMechanicalTick() {
+    this._triggerHaptic('Haptic: Escapement Tick', 6);
     const ctx = this._ensureContext();
     if (!ctx) return;
 
