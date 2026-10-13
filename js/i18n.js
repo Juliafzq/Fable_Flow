@@ -191,6 +191,8 @@ const ZH = {
   'Task length limit reached': '字数已达上限',
   'Reflection limit reached': '字数已达上限',
   'Maximum 8 tasks per card reached.': '每张卡片最多 8 条待办',
+  'Maximum 6 active tomatoes reached.': '最多同时开启 6 个番茄钟',
+  'Maximum 6 active tomatoes reached': '最多同时开启 6 个番茄钟',
   'Photo updated in Evening Journal': '照片已更新',
   'Photo updated on archived card': '照片已更新',
   'Could not process selected image file.': '这张图片无法读取，换一张试试',

@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v66';
-import { CardGestureMath } from './cardGestureMath.js?v=20261013_v66';
-import { SensoryEngine } from './sensoryEngine.js?v=20261013_v66';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v66';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v66';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v67';
+import { CardGestureMath } from './cardGestureMath.js?v=20261013_v67';
+import { SensoryEngine } from './sensoryEngine.js?v=20261013_v67';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v67';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v67';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261013_v66';
+} from './i18n.js?v=20261013_v67';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1957,6 +1957,7 @@ export class FableFlowApp {
   redrawStrikesAfterFlip(wrapperEl, containerEl) {
     if (!wrapperEl || !containerEl) return;
     const redraw = () => {
+      if (wrapperEl.classList.contains('is-flipped')) return;
       containerEl.querySelectorAll('.task-row').forEach((row) => {
         const canvas = row.querySelector('.pencil-strike-canvas');
         if (canvas) {
@@ -1964,17 +1965,27 @@ export class FableFlowApp {
         }
       });
     };
+    if (!wrapperEl.classList.contains('is-flipped')) {
+      redraw();
+    }
     clearTimeout(wrapperEl._strikeRedrawTimer);
+    if (wrapperEl._strikeRedrawOnEnd) {
+      wrapperEl.removeEventListener('transitionend', wrapperEl._strikeRedrawOnEnd);
+      wrapperEl._strikeRedrawOnEnd = null;
+    }
     const onEnd = (e) => {
       if (e.target !== wrapperEl || e.propertyName !== 'transform') return;
       wrapperEl.removeEventListener('transitionend', onEnd);
+      wrapperEl._strikeRedrawOnEnd = null;
       clearTimeout(wrapperEl._strikeRedrawTimer);
       redraw();
     };
+    wrapperEl._strikeRedrawOnEnd = onEnd;
     wrapperEl.addEventListener('transitionend', onEnd);
     // Fallback in case transitionend doesn't fire (e.g. reduced motion / interrupted flip)
     wrapperEl._strikeRedrawTimer = setTimeout(() => {
       wrapperEl.removeEventListener('transitionend', onEnd);
+      wrapperEl._strikeRedrawOnEnd = null;
       redraw();
     }, 650);
   }
@@ -3963,7 +3974,12 @@ export class FableFlowApp {
     const freeSlot = this.state.timers.find(
       (s) => !s.assignedTaskId && !s.customTitle
     );
-    const targetQuad = freeSlot ? freeSlot.quadrant : 0;
+    if (!freeSlot) {
+      this.showNotificationBanner(this.t('Maximum 6 active tomatoes reached.'));
+      this.showTelemetryToast(this.t('Maximum 6 active tomatoes reached'));
+      return;
+    }
+    const targetQuad = freeSlot.quadrant;
     this.assignTaskToQuadrant(targetQuad, task);
 
     this.state.selectedQuadrant = targetQuad;
@@ -4910,47 +4926,76 @@ export class FableFlowApp {
     }
 
     const rowRect = rowEl.getBoundingClientRect();
-    const rowW = Math.max(280, rowRect.width || rowEl.clientWidth || 362);
-    const rowH = Math.max(36, rowRect.height || rowEl.clientHeight || 48);
+    const rowW = Math.max(280, rowEl.clientWidth || rowEl.offsetWidth || rowRect.width || 362);
+    const rowH = Math.max(36, rowEl.clientHeight || rowEl.offsetHeight || rowRect.height || 48);
 
     const numSpan = rowEl.querySelector('.task-index');
     const titleSpan = rowEl.querySelector('.task-title');
     const tomatoBtn = rowEl.querySelector('.task-tomato-btn');
 
-    // Safe right boundary so strikethrough lines NEVER touch the mini-tomato or card edge
+    // Use untransformed local offsetLeft/offsetWidth so 3D card rotation never shifts boundaries
     let maxSafeRightX = rowW - 30;
-    if (tomatoBtn && tomatoBtn.getBoundingClientRect().width > 0) {
-      const tomRect = tomatoBtn.getBoundingClientRect();
-      maxSafeRightX = Math.min(maxSafeRightX, tomRect.left - rowRect.left - 16);
+    if (tomatoBtn && tomatoBtn.offsetWidth > 0) {
+      maxSafeRightX = Math.min(maxSafeRightX, tomatoBtn.offsetLeft - 16);
     }
 
     const indexLeftX =
-      numSpan && numSpan.getBoundingClientRect().width > 0
-        ? Math.max(18, numSpan.getBoundingClientRect().left - rowRect.left - 3)
+      numSpan && numSpan.offsetWidth > 0
+        ? Math.max(18, numSpan.offsetLeft - 3)
         : 22;
+
+    const segKey = `${rowW}|${rowH}|${titleSpan ? titleSpan.textContent : ''}|${
+      titleSpan ? titleSpan.style.fontSize : ''
+    }|${indexLeftX}|${maxSafeRightX}`;
+
+    const wrapperEl = rowEl.closest('.daily-card-3d');
+    const numRect = numSpan ? numSpan.getBoundingClientRect() : null;
+    const titleRect = titleSpan ? titleSpan.getBoundingClientRect() : null;
+    const isMirrored = Boolean(
+      (wrapperEl && wrapperEl.classList.contains('is-flipped')) ||
+        (numRect && titleRect && numRect.width > 0 && titleRect.width > 0 && numRect.left > titleRect.left)
+    );
+    const isMidRotation = rowRect.width > 0 && Math.abs(rowRect.width - rowW) > 1.5;
+
+    if ((isMirrored || isMidRotation) && rowEl._cachedLineSegments && rowEl._cachedLineSegmentsKey === segKey) {
+      return rowEl._cachedLineSegments;
+    }
 
     if (titleSpan) {
       const clientRects = Array.from(titleSpan.getClientRects()).filter(
         (r) => r.width > 2 && r.height > 4
       );
-      if (clientRects.length > 0) {
-        return clientRects.map((r, lineIdx) => {
+      if (clientRects.length > 0 && rowRect.width > 4) {
+        const scaleX = rowW / rowRect.width;
+        const scaleY = rowRect.height > 4 ? rowH / rowRect.height : 1;
+        const segments = clientRects.map((r, lineIdx) => {
+          const localLeft = isMirrored
+            ? (rowRect.right - r.right) * scaleX
+            : (r.left - rowRect.left) * scaleX;
+          const localRight = isMirrored
+            ? (rowRect.right - r.left) * scaleX
+            : (r.right - rowRect.left) * scaleX;
           const lineStartX =
             lineIdx === 0
               ? indexLeftX
-              : Math.max(58, r.left - rowRect.left - 3);
-          const rawEndX = r.right - rowRect.left + 14;
+              : Math.max(58, localLeft - 3);
+          const rawEndX = localRight + 14;
           const lineEndX = Math.max(
             lineStartX + 36,
             Math.min(maxSafeRightX, rawEndX)
           );
-          const lineCenterY = (r.top + r.bottom) * 0.5 - rowRect.top;
+          const lineCenterY = ((r.top + r.bottom) * 0.5 - rowRect.top) * scaleY;
           return {
             minX: lineStartX,
             maxX: lineEndX,
             centerY: lineCenterY,
           };
         });
+        if (!isMirrored && !isMidRotation) {
+          rowEl._cachedLineSegments = segments;
+          rowEl._cachedLineSegmentsKey = segKey;
+        }
+        return segments;
       }
     }
 
