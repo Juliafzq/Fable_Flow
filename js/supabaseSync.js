@@ -119,6 +119,13 @@ export class SupabaseSyncService {
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (parsed && parsed.user && parsed.user.id && parsed.user.email) {
+        if (
+          parsed.user.email === 'google.user@gmail.com' ||
+          parsed.user.email === 'apple.user@icloud.com'
+        ) {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+          return null;
+        }
         return parsed;
       }
       return null;
@@ -387,13 +394,7 @@ export class SupabaseSyncService {
   _resolveProviderEmail(cleanProvider, emailHint) {
     const trimmed = String(emailHint || '').trim().toLowerCase();
     if (trimmed && trimmed.includes('@')) return trimmed;
-    const accounts = this._loadLocalAccounts();
-    for (const acc of Object.values(accounts)) {
-      if (acc && acc.provider === cleanProvider && acc.email) {
-        return acc.email;
-      }
-    }
-    return cleanProvider === 'apple' ? 'apple.user@icloud.com' : 'google.user@gmail.com';
+    return '';
   }
 
   async signInWithProvider(provider, emailHint = '') {
@@ -407,6 +408,17 @@ export class SupabaseSyncService {
         window.location.href = `${this.config.url}/auth/v1/authorize?provider=${cleanProvider}&redirect_to=${redirectTo}`;
         return { redirecting: true };
       }
+    }
+
+    if (!cleanEmail) {
+      throw new Error(
+        cleanProvider === 'apple'
+          ? 'Enter your Apple ID email above first, or connect OAuth in Cloud Sync settings'
+          : 'Enter your Google email above first, or connect OAuth in Cloud Sync settings'
+      );
+    }
+
+    if (this.isCloudConfigured()) {
 
       // Cloud configured without external OAuth client ID yet: provision/authenticate
       // the Google/Apple account directly in Supabase GoTrue so state syncs to Postgres.

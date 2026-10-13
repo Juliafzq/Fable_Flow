@@ -56,7 +56,7 @@ snap('14_auth', "(() => { const a = window.fableFlowApp; a.openAuthModal('signin
 snap('15_about', "(() => { const a = window.fableFlowApp; a.openAboutModal(); })()", wait=11.5)
 snap('16_add_task_modal', "(() => { const a = window.fableFlowApp; a.openCustomTitleModal(2); })()")
 snap('17_delete_modal', "(() => { const a = window.fableFlowApp; a.confirmPermanentDeleteTask(a.state.tasks[1]); })()")
-for i in range(9):
+for i in range(10):
     snap(f'2{i}_tour_step{i+1}', f"(() => {{ const a = window.fableFlowApp; a.startGuidedTour({i}); }})()", wait=1.4)
 # front-page tour mid-uncross frame
 snap('2y_tour_type_digits', "(() => { const a = window.fableFlowApp; a.startGuidedTour(5); })()", wait=2.3)

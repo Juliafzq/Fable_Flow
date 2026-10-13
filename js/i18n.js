@@ -165,6 +165,12 @@ const ZH = {
   'Swipe the date bar to browse past cards': '左右滑动日期栏，翻看以前的卡片',
   'Zoom Out · Monthly Calendar': '月历 · 整月一览',
   'Pinch two fingers to zoom out to monthly calendar': '双指捏合，查看整个月',
+  'Profile & Settings': '个人与设置',
+  'Sign in and change settings here': '在这里登录账号与更改设置',
+  'Enter your Google email above first, or connect OAuth in Cloud Sync settings':
+    '请先在上方输入 Google 邮箱，或在云同步设置中配置 OAuth',
+  'Enter your Apple ID email above first, or connect OAuth in Cloud Sync settings':
+    '请先在上方输入 Apple ID 邮箱，或在云同步设置中配置 OAuth',
   'Last': '上一步',
   'Next': '下一步',
 

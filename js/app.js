@@ -1343,6 +1343,9 @@ export class FableFlowApp {
         this.showTelemetryToast(this.t('Signed in as {email}', { email: user.email }));
       }
     } catch (err) {
+      if (this.els.authEmailInput && !this.els.authEmailInput.value.trim()) {
+        this.els.authEmailInput.focus();
+      }
       this.showAuthError(err && err.message ? this.t(err.message) : this.t('Sign-in failed'));
     }
   }
@@ -6575,11 +6578,61 @@ export class FableFlowApp {
           }
         },
       },
+      // STEP 9: PROFILE MENU (Sign in and change settings)
+      {
+        title: 'Profile & Settings',
+        desc: 'Sign in and change settings here',
+        applyPage: () => {
+          this.restoreTourDemoArchiveCards();
+          this.state.activePillar = 'card';
+          this.state.isCardFlipped = false;
+          this._todayFlipDeg = 0;
+          this.setInstantCardRotation(this.els.card3DWrapper, false, 0);
+          if (this.els.profileModalOverlay) {
+            this.els.profileModalOverlay.classList.add('hidden');
+          }
+        },
+        animateFrame: (elapsedMs) => {
+          const period = 3200;
+          const t = (elapsedMs % period) / period;
+          if (t < 0.28) {
+            if (this.els.profileModalOverlay) {
+              this.els.profileModalOverlay.classList.add('hidden');
+            }
+            const btnBox = this.getElementBoxInTourOverlay(this.els.profileBtn);
+            if (btnBox) {
+              const p = t / 0.28;
+              const fade = 0.12 + 0.88 * Math.sin(p * Math.PI);
+              const scale = 0.88 + 0.16 * Math.sin(p * Math.PI);
+              this.setTourDotState(this.els.tourPageDot, btnBox.x, btnBox.y, fade, scale, true);
+            }
+          } else {
+            if (
+              this.els.profileModalOverlay &&
+              this.els.profileModalOverlay.classList.contains('hidden')
+            ) {
+              this.openProfileModal();
+            }
+            const targetEl = this.els.profileAccountBtn || this.els.profileBtn;
+            const rowBox = this.getElementBoxInTourOverlay(targetEl);
+            if (rowBox) {
+              const subT = (t - 0.28) / 0.72;
+              const fade = 0.12 + 0.88 * Math.pow(Math.sin(subT * Math.PI), 1.1);
+              const scale = 0.9 + 0.14 * Math.sin(subT * Math.PI);
+              this.setTourDotState(this.els.tourPageDot, rowBox.x, rowBox.y, fade, scale, true);
+            }
+          }
+          this.setTourDotState(this.els.tourPageDot2, null, null, 0);
+        },
+      },
     ];
   }
 
   stopTourDemoLoop() {
     this.closeHeroTimeEditorDOM();
+    if (this.els.profileModalOverlay) {
+      this.els.profileModalOverlay.classList.add('hidden');
+    }
     if (this._tourDemoTimer) {
       clearInterval(this._tourDemoTimer);
       this._tourDemoTimer = null;
