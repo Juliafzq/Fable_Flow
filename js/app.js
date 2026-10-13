@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v67';
-import { CardGestureMath } from './cardGestureMath.js?v=20261013_v67';
-import { SensoryEngine } from './sensoryEngine.js?v=20261013_v67';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v67';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v67';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v68';
+import { CardGestureMath } from './cardGestureMath.js?v=20261013_v68';
+import { SensoryEngine } from './sensoryEngine.js?v=20261013_v68';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v68';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v68';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261013_v67';
+} from './i18n.js?v=20261013_v68';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -3976,7 +3976,6 @@ export class FableFlowApp {
     );
     if (!freeSlot) {
       this.showNotificationBanner(this.t('Maximum 6 active tomatoes reached.'));
-      this.showTelemetryToast(this.t('Maximum 6 active tomatoes reached'));
       return;
     }
     const targetQuad = freeSlot.quadrant;
