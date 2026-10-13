@@ -557,7 +557,14 @@ export class FableFlowApp {
       heroTimeInput: document.getElementById('hero-time-input'),
       heroTimeUnitBadge: document.getElementById('hero-time-unit-badge'),
       heroTimeSetBtn: document.getElementById('hero-time-set-btn'),
+      heroSubtitleWrap: document.getElementById('hero-subtitle-wrap'),
+      heroSubtitleRow: document.getElementById('hero-subtitle-row'),
       heroSubtitle: document.getElementById('hero-subtitle'),
+      heroSyncToCardBtn: document.getElementById('hero-sync-to-card-btn'),
+      heroTitleEditor: document.getElementById('hero-title-editor'),
+      heroTitleOrderPrefix: document.getElementById('hero-title-order-prefix'),
+      heroTitleInput: document.getElementById('hero-title-input'),
+      heroTitleSetBtn: document.getElementById('hero-title-set-btn'),
       heroSubtitleDropdownMount: document.getElementById('hero-subtitle-dropdown-mount'),
       heroTomatoStage: document.getElementById('hero-tomato-stage'),
       heroBtnGrid: document.getElementById('hero-btn-grid'),
@@ -982,12 +989,17 @@ export class FableFlowApp {
         }
       }
       if (
-        this.state.isHeroDropdownOpen &&
+        (this.state.isHeroDropdownOpen ||
+          (this.els.heroTitleEditor && !this.els.heroTitleEditor.classList.contains('hidden'))) &&
         !e.target.closest('.hero-subtitle-wrap')
       ) {
-        this.state.isHeroDropdownOpen = false;
-        if (this.state.activePillar === 'timer' && this.state.timerSubMode === 'hero') {
-          this.renderHeroScreen();
+        if (this.els.heroTitleEditor && !this.els.heroTitleEditor.classList.contains('hidden')) {
+          this.commitHeroTitleEditor();
+        } else {
+          this.state.isHeroDropdownOpen = false;
+          if (this.state.activePillar === 'timer' && this.state.timerSubMode === 'hero') {
+            this.renderHeroScreen();
+          }
         }
       }
     });
@@ -1017,17 +1029,28 @@ export class FableFlowApp {
       this.toggleStopwatchMode(this.state.selectedQuadrant);
     });
 
-    // PM #4: Clicking the task subtitle on the Hero page opens the reassignment dropdown right on the Hero page
+    // Clicking the task subtitle ("01 / TAP TO ASSIGN" or "01 / Title") opens the inline title box ready to type
     this.els.heroSubtitle.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.cancelHeroTimeEditor();
-      this.state.isHeroDropdownOpen = !this.state.isHeroDropdownOpen;
-      this.saveState();
-      this.renderHeroScreen();
+      this.openHeroTitleEditor();
+    });
+    this.els.heroSubtitle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.openHeroTitleEditor();
+      }
     });
 
-    // 5b. Tap-on-Digits Time Entry on Hero Readout (0–180 min or HH:MM)
+    if (this.els.heroSyncToCardBtn) {
+      this.els.heroSyncToCardBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.syncCustomTomatoToCard(this.state.selectedQuadrant);
+      });
+    }
+
+    // 5b. Tap-on-Digits Time Entry & Inline Title Entry on Hero Page
     this.bindHeroReadoutTimeEntry();
+    this.bindHeroTitleEntry();
 
     // 6. Chronological Card Stack Viewer Controls (Mockup 06-stack-detail.png)
     this.bindStackViewerEvents();
@@ -2962,6 +2985,7 @@ export class FableFlowApp {
 
     stage.addEventListener('pointerdown', (e) => {
       this.closeHeroTimeEditorDOM();
+      this.closeHeroTitleEditorDOM();
       const slot = this.state.timers[this.state.selectedQuadrant];
       if (!slot) return;
 
@@ -3157,6 +3181,7 @@ export class FableFlowApp {
   }
 
   openHeroTimeEditor() {
+    this.closeHeroTitleEditorDOM();
     const slot = this.state.timers[this.state.selectedQuadrant] || this.state.timers[0];
     if (!slot || !this.els.heroTimeEditor || !this.els.heroTimeInput) return;
 
@@ -3202,6 +3227,193 @@ export class FableFlowApp {
     if (!this.els.heroTimeEditor || this.els.heroTimeEditor.classList.contains('hidden')) return;
     this.closeHeroTimeEditorDOM();
     this.renderHeroScreen();
+  }
+
+  bindHeroTitleEntry() {
+    if (!this.els.heroTitleEditor || !this.els.heroTitleInput) return;
+
+    this.els.heroTitleEditor.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    let heroTitleComposing = false;
+    let heroTitleCompEnd = 0;
+    this.els.heroTitleInput.addEventListener('compositionstart', () => {
+      heroTitleComposing = true;
+    });
+    this.els.heroTitleInput.addEventListener('compositionend', () => {
+      heroTitleComposing = false;
+      heroTitleCompEnd = Date.now();
+      const clamped = this.clampTaskInputText(this.els.heroTitleInput.value);
+      if (this.els.heroTitleInput.value !== clamped) {
+        this.els.heroTitleInput.value = clamped;
+      }
+    });
+
+    this.els.heroTitleInput.addEventListener('input', (e) => {
+      if (heroTitleComposing || e.isComposing) return;
+      const clamped = this.clampTaskInputText(this.els.heroTitleInput.value);
+      if (this.els.heroTitleInput.value !== clamped) {
+        this.els.heroTitleInput.value = clamped;
+        if (clamped.length >= MAX_TASK_CHARS) {
+          this.showTelemetryToast('Task length limit reached');
+        }
+      }
+    });
+
+    this.els.heroTitleInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      const imeActive =
+        heroTitleComposing ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        Date.now() - heroTitleCompEnd < 120;
+      if (e.key === 'Enter') {
+        if (imeActive) return;
+        e.preventDefault();
+        this.commitHeroTitleEditor();
+      } else if (e.key === 'Escape') {
+        if (imeActive) return;
+        e.preventDefault();
+        this.cancelHeroTitleEditor();
+      }
+    });
+
+    if (this.els.heroTitleSetBtn) {
+      this.els.heroTitleSetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.commitHeroTitleEditor();
+      });
+    }
+  }
+
+  openHeroTitleEditor() {
+    const slot = this.state.timers[this.state.selectedQuadrant] || this.state.timers[0];
+    if (!slot || !this.els.heroTitleEditor || !this.els.heroTitleInput) return;
+
+    this.closeHeroTimeEditorDOM();
+    if (this.els.heroSubtitleWrap) {
+      this.els.heroSubtitleWrap.classList.add('is-editing-title');
+    }
+    if (this.els.heroSubtitleRow) {
+      this.els.heroSubtitleRow.classList.add('hidden');
+    }
+    this.els.heroTitleEditor.classList.remove('hidden');
+
+    const orderStr = String(slot.assignedTaskOrder || slot.quadrant + 1).padStart(2, '0');
+    if (this.els.heroTitleOrderPrefix) {
+      this.els.heroTitleOrderPrefix.textContent = `${orderStr} /`;
+    }
+    this.els.heroTitleInput.value = slot.customTitle || '';
+
+    this.state.isHeroDropdownOpen = true;
+    if (this.els.heroSubtitleDropdownMount) {
+      this.els.heroSubtitleDropdownMount.innerHTML = '';
+      this.els.heroSubtitleDropdownMount.appendChild(
+        this.buildTaskDropdownDOM(slot.quadrant)
+      );
+    }
+
+    try {
+      this.els.heroTitleInput.focus();
+      this.els.heroTitleInput.select();
+    } catch (_) {}
+    setTimeout(() => {
+      if (this.els.heroTitleEditor && !this.els.heroTitleEditor.classList.contains('hidden')) {
+        this.els.heroTitleInput.focus();
+        this.els.heroTitleInput.select();
+      }
+    }, 20);
+  }
+
+  closeHeroTitleEditorDOM() {
+    if (this.els.heroSubtitleWrap) {
+      this.els.heroSubtitleWrap.classList.remove('is-editing-title');
+    }
+    if (this.els.heroTitleEditor) {
+      this.els.heroTitleEditor.classList.add('hidden');
+    }
+    if (this.els.heroSubtitleRow) {
+      this.els.heroSubtitleRow.classList.remove('hidden');
+    }
+  }
+
+  commitHeroTitleEditor() {
+    if (!this.els.heroTitleEditor || this.els.heroTitleEditor.classList.contains('hidden')) return;
+    const rawVal = this.els.heroTitleInput ? this.els.heroTitleInput.value : '';
+    const cleanVal = this.clampTaskInputText(rawVal).trim();
+    const quadrant = this.state.selectedQuadrant;
+    const slot = this.state.timers[quadrant] || this.state.timers[0];
+
+    this.closeHeroTitleEditorDOM();
+    this.state.isHeroDropdownOpen = false;
+
+    if (cleanVal && slot) {
+      const linkedTask =
+        slot.assignedTaskId &&
+        this.state.tasks.find((t) => t.id === slot.assignedTaskId);
+      if (linkedTask) {
+        linkedTask.title = cleanVal;
+        slot.customTitle = cleanVal;
+        this.state.openDropdownQuadrant = null;
+        this.sensory.playMechanicalTick();
+        this.saveState();
+        this.renderAll();
+      } else {
+        this.assignCustomTitleToQuadrant(slot.quadrant, cleanVal);
+      }
+    } else {
+      this.renderHeroScreen();
+    }
+  }
+
+  cancelHeroTitleEditor() {
+    if (!this.els.heroTitleEditor || this.els.heroTitleEditor.classList.contains('hidden')) return;
+    this.closeHeroTitleEditorDOM();
+    this.state.isHeroDropdownOpen = false;
+    this.renderHeroScreen();
+  }
+
+  isSlotCustomUnlinkedTitle(slot) {
+    if (!slot || !slot.customTitle || !slot.customTitle.trim()) return false;
+    if (!slot.assignedTaskId) return true;
+    return !this.state.tasks.some((t) => t.id === slot.assignedTaskId);
+  }
+
+  syncCustomTomatoToCard(quadrant) {
+    const slot = this.state.timers[quadrant] || this.state.timers[this.state.selectedQuadrant];
+    if (!slot || !slot.customTitle || !slot.customTitle.trim()) return;
+
+    const existingLinked =
+      slot.assignedTaskId &&
+      this.state.tasks.find((t) => t.id === slot.assignedTaskId);
+    if (existingLinked) {
+      this.showTelemetryToast(this.t('Synced to Today’s Card'));
+      this.renderAll();
+      return;
+    }
+
+    if (this.state.tasks.length >= MAX_CARD_TASKS) {
+      this.showNotificationBanner(this.t('Maximum 8 tasks per card reached.'));
+      return;
+    }
+
+    const newOrder = this.state.tasks.length + 1;
+    const newTask = {
+      id: 'task-' + Date.now(),
+      orderIndex: newOrder,
+      title: slot.customTitle.trim(),
+      isCompleted: slot.runState === 'completed',
+      assignedQuadrant: slot.quadrant,
+    };
+    this.state.tasks.push(newTask);
+    slot.assignedTaskId = newTask.id;
+    slot.assignedTaskOrder = newOrder;
+
+    this.sensory.playMechanicalTick();
+    this.showTelemetryToast(this.t('Synced to Today’s Card'));
+    this.saveState();
+    this.renderAll();
   }
 
   setCustomTimerMinutes(quadrant, minutes) {
@@ -3622,6 +3834,7 @@ export class FableFlowApp {
       slot.angleDegrees = 25 * 6.0;
     }
 
+    this.closeHeroTitleEditorDOM();
     this.state.openDropdownQuadrant = null;
     this.state.isHeroDropdownOpen = false;
     this.sensory.playDialRatchetNotch(true);
@@ -3649,6 +3862,7 @@ export class FableFlowApp {
       slot.angleDegrees = 25 * 6.0;
     }
 
+    this.closeHeroTitleEditorDOM();
     this.state.openDropdownQuadrant = null;
     this.state.isHeroDropdownOpen = false;
     this.sensory.playDialRatchetNotch(true);
@@ -3676,6 +3890,7 @@ export class FableFlowApp {
     slot.angleDegrees = 0;
     slot.lastTickTimestamp = null;
 
+    this.closeHeroTitleEditorDOM();
     this.state.openDropdownQuadrant = null;
     this.state.isHeroDropdownOpen = false;
     this.sensory.playDialRatchetNotch(false);
@@ -3728,6 +3943,7 @@ export class FableFlowApp {
     if (!isTimer || this.state.timerSubMode !== 'hero') {
       this.state.isHeroDropdownOpen = false;
       this.closeHeroTimeEditorDOM();
+      this.closeHeroTitleEditorDOM();
     }
     if (this._lastRenderedPillar && this._lastRenderedPillar !== pillar) {
       if (this.els.notificationBanner) {
@@ -4816,16 +5032,13 @@ export class FableFlowApp {
           e.stopPropagation();
           const curSlot = this.state.timers[qIdx];
           const curAssigned = Boolean(curSlot && (curSlot.assignedTaskId || curSlot.customTitle));
-          if (curAssigned) {
-            this.state.openDropdownQuadrant = null;
-            this.state.selectedQuadrant = qIdx;
-            this.state.timerSubMode = 'hero';
-            this.saveState();
-            this.renderAll();
-          } else {
-            this.state.openDropdownQuadrant =
-              this.state.openDropdownQuadrant === qIdx ? null : qIdx;
-            this.renderGridScreen();
+          this.state.openDropdownQuadrant = null;
+          this.state.selectedQuadrant = qIdx;
+          this.state.timerSubMode = 'hero';
+          this.saveState();
+          this.renderAll();
+          if (!curAssigned) {
+            this.openHeroTitleEditor();
           }
         });
 
@@ -5077,6 +5290,10 @@ export class FableFlowApp {
       listBody.appendChild(unassignBtn);
     }
 
+    if (availableTasks.length === 0 && !hasExistingTitle) {
+      menu.classList.add('has-no-task-items');
+    }
+
     menu.appendChild(listBody);
     return menu;
   }
@@ -5107,6 +5324,15 @@ export class FableFlowApp {
     } else {
       const orderStr = String(slot.quadrant + 1).padStart(2, '0');
       this.els.heroSubtitle.textContent = `${orderStr} / ${this.t('TAP TO ASSIGN')}`;
+    }
+
+    if (this.els.heroSyncToCardBtn) {
+      const canSyncToCard = this.isSlotCustomUnlinkedTitle(slot);
+      this.els.heroSyncToCardBtn.classList.toggle('hidden', !canSyncToCard);
+      const syncLabel = this.els.heroSyncToCardBtn.querySelector('.hero-sync-to-card-label');
+      if (syncLabel) {
+        syncLabel.textContent = this.t('+ Card');
+      }
     }
 
     if (this.els.heroSubtitleDropdownMount) {
@@ -6410,6 +6636,95 @@ export class FableFlowApp {
           this.setTourDotState(this.els.tourPageDot2, null, null, 0);
         },
       },
+      // STEP 5c: TAP TO ASSIGN & SYNC CUSTOM TITLE TO CARD
+      {
+        title: 'Tap to Assign & Sync to Card',
+        desc: 'Tap title to name your timer, then tap + Card to add it to today’s card',
+        applyPage: () => {
+          this.restoreTourDemoArchiveCards();
+          this.state.activePillar = 'timer';
+          this.state.timerSubMode = 'hero';
+          this.state.isHeroDropdownOpen = false;
+          this.closeHeroTimeEditorDOM();
+          this.closeHeroTitleEditorDOM();
+        },
+        animateFrame: (elapsedMs) => {
+          const subtitleRow = this.els.heroSubtitleRow;
+          const subtitle = this.els.heroSubtitle;
+          const syncBtn = this.els.heroSyncToCardBtn;
+          const titleEditor = this.els.heroTitleEditor;
+          const titleInput = this.els.heroTitleInput;
+          const titleSetBtn = this.els.heroTitleSetBtn;
+          if (!subtitle || !titleEditor || !titleInput) return;
+
+          const period = 4800;
+          const t = (elapsedMs % period) / period;
+          const sampleTitle = this.t('Deep Work');
+          let dot = null;
+          let isAssignedDemo = false;
+
+          if (t < 0.22) {
+            // Phase 1: Unassigned tomato shows "01 / TAP TO ASSIGN"; dot pulses on it
+            this.closeHeroTitleEditorDOM();
+            subtitle.textContent = `01 / ${this.t('TAP TO ASSIGN')}`;
+            if (syncBtn) syncBtn.classList.add('hidden');
+            const box = this.getElementBoxInTourOverlay(subtitle);
+            if (box) {
+              const p = t / 0.22;
+              const pulse = Math.sin(p * Math.PI);
+              dot = { x: box.x, y: box.y, opacity: 0.12 + 0.88 * pulse, scale: 0.9 + 0.16 * pulse, ring: true };
+            }
+          } else if (t < 0.54) {
+            // Phase 2: Inline title box opens; custom title is typed and Set is tapped
+            if (subtitleRow) subtitleRow.classList.add('hidden');
+            titleEditor.classList.remove('hidden');
+            if (this.els.heroTitleOrderPrefix) this.els.heroTitleOrderPrefix.textContent = '01 /';
+            const typeP = (t - 0.22) / 0.32;
+            const charCount = Math.max(1, Math.min(sampleTitle.length, Math.ceil(typeP * 1.45 * sampleTitle.length)));
+            titleInput.value = sampleTitle.slice(0, charCount);
+            if (typeP > 0.65 && titleSetBtn) {
+              const box = this.getElementBoxInTourOverlay(titleSetBtn);
+              if (box) {
+                const subP = (typeP - 0.65) / 0.35;
+                const pulse = Math.sin(subP * Math.PI);
+                dot = { x: box.x, y: box.y, opacity: 0.12 + 0.88 * pulse, scale: 0.9 + 0.16 * pulse, ring: true };
+              }
+            }
+          } else if (t < 0.84) {
+            // Phase 3: Custom title is set; "+ Card" button appears on the right of the title and dot taps it
+            this.closeHeroTitleEditorDOM();
+            subtitle.textContent = `01 / ${sampleTitle}`;
+            isAssignedDemo = true;
+            if (syncBtn) {
+              syncBtn.classList.remove('hidden');
+              const syncLabel = syncBtn.querySelector('.hero-sync-to-card-label');
+              if (syncLabel) syncLabel.textContent = this.t('+ Card');
+              const box = this.getElementBoxInTourOverlay(syncBtn);
+              if (box) {
+                const subP = (t - 0.54) / 0.30;
+                const pulse = Math.sin(subP * Math.PI);
+                dot = { x: box.x, y: box.y, opacity: 0.12 + 0.88 * pulse, scale: 0.9 + 0.16 * pulse, ring: true };
+              }
+            }
+          } else {
+            // Phase 4: Task is synced to Today's Card (+ Card button hides)
+            this.closeHeroTitleEditorDOM();
+            subtitle.textContent = `01 / ${sampleTitle}`;
+            isAssignedDemo = true;
+            if (syncBtn) syncBtn.classList.add('hidden');
+          }
+
+          if (this.hero3D) {
+            this.hero3D.updateOdometer(25 * 6.0, 0, isAssignedDemo, false);
+          }
+          if (dot) {
+            this.setTourDotState(this.els.tourPageDot, dot.x, dot.y, dot.opacity, dot.scale, dot.ring);
+          } else {
+            this.setTourDotState(this.els.tourPageDot, null, null, 0);
+          }
+          this.setTourDotState(this.els.tourPageDot2, null, null, 0);
+        },
+      },
       // STEP 6: 6-TOMATO GRID PAGE
       {
         title: 'Tomato Grid · 6 Focus Timers',
@@ -6717,6 +7032,7 @@ export class FableFlowApp {
 
   stopTourDemoLoop() {
     this.closeHeroTimeEditorDOM();
+    this.closeHeroTitleEditorDOM();
     if (this.els.profileModalOverlay) {
       this.els.profileModalOverlay.classList.add('hidden');
     }

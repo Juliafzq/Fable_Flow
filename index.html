@@ -10,13 +10,13 @@
   <meta name="apple-mobile-web-app-title" content="UNTO / FLOW" />
   <meta name="application-name" content="UNTO / FLOW" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261013_v63" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261013_v63" />
-  <link rel="manifest" href="manifest.json?v=20261013_v63" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261013_v64" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261013_v64" />
+  <link rel="manifest" href="manifest.json?v=20261013_v64" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261013_v63" />
+  <link rel="stylesheet" href="css/style.css?v=20261013_v64" />
 </head>
 <body>
 
@@ -181,8 +181,38 @@
             </div>
           </div>
         </div>
-        <div class="hero-subtitle-wrap">
-          <div id="hero-subtitle" class="hero-task-subtitle" role="button" tabindex="0" title="Tap to assign or change task right on this page">01 / Example Task</div>
+        <div id="hero-subtitle-wrap" class="hero-subtitle-wrap">
+          <div id="hero-subtitle-row" class="hero-subtitle-row">
+            <div id="hero-subtitle" class="hero-task-subtitle" role="button" tabindex="0" title="Tap to assign or change task right on this page">01 / Example Task</div>
+            <button
+              type="button"
+              id="hero-sync-to-card-btn"
+              class="hero-sync-to-card-btn hidden"
+              aria-label="Sync this task to Today's Card"
+              title="Sync this task to Today's Card list"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="2" y="1.6" width="9.5" height="12.6" rx="1.8" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4.6 5.4H8.6M4.6 8H7.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <circle cx="11.8" cy="11.8" r="3.3" fill="currentColor"/>
+                <path d="M11.8 10.2V13.4M10.2 11.8H13.4" stroke="#FAF9F5" stroke-width="1.35" stroke-linecap="round"/>
+              </svg>
+              <span class="hero-sync-to-card-label">+ Card</span>
+            </button>
+          </div>
+          <div id="hero-title-editor" class="hero-title-editor hidden" role="group" aria-label="Type timer task title">
+            <div class="hero-title-input-bar">
+              <span id="hero-title-order-prefix" class="hero-title-order-prefix">01 /</span>
+              <input
+                id="hero-title-input"
+                type="text"
+                class="hero-title-input"
+                placeholder="Type task title..."
+                aria-label="Type task title"
+              />
+              <button type="button" id="hero-title-set-btn" class="hero-title-set-btn">Set</button>
+            </div>
+          </div>
           <div id="hero-subtitle-dropdown-mount" class="hero-subtitle-dropdown-mount"></div>
         </div>
       </div>
@@ -556,6 +586,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261013_v63"></script>
+  <script type="module" src="js/app.js?v=20261013_v64"></script>
 </body>
 </html>

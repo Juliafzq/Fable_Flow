@@ -10,7 +10,7 @@ for sec in sections:
     for l in lines:
         if not l.strip(): continue
         if name.startswith('06_grid_dropdown') and 'dropdown-task-item' in l: continue
-        if name.startswith(('26_tour_step7', '27_tour_step8')): continue  # mid-slide animation frames
+        if name.startswith(('26_tour_step7', '27_tour_step8', '207_tour_step8', '208_tour_step9')): continue  # mid-slide animation frames
         bad.append((name, l.strip()))
 for b in bad: print('ISSUE', b)
 if 'Traceback' in out: print(out[-800:]); bad.append('crash')

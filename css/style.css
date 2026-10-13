@@ -1320,18 +1320,32 @@ html.mobile-landscape-locked .app-viewport {
 
 .hero-subtitle-wrap {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
   max-width: 100%;
 }
 
-.hero-task-subtitle {
+.hero-subtitle-row {
   margin-top: clamp(4px, 1dvh, 10px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.hero-subtitle-row.hidden {
+  display: none !important;
+}
+
+.hero-task-subtitle {
+  margin-top: 0;
   font-size: clamp(19px, 3dvh, 24px);
   font-weight: 600;
   letter-spacing: 0.01em;
   color: #111111;
   cursor: pointer;
-  display: inline-block;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1342,11 +1356,142 @@ html.mobile-landscape-locked .app-viewport {
   opacity: 0.75;
 }
 
+.hero-sync-to-card-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 27px;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  border: 1.4px solid rgba(17, 17, 17, 0.28);
+  background: rgba(250, 249, 245, 0.94);
+  color: #141414;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.hero-sync-to-card-btn:hover {
+  background: #111111;
+  color: #FAF9F5;
+  border-color: #111111;
+}
+
+.hero-sync-to-card-btn:active {
+  transform: scale(0.95);
+}
+
+.hero-sync-to-card-btn.hidden {
+  display: none !important;
+}
+
+.hero-title-editor {
+  margin-top: clamp(4px, 1dvh, 10px);
+  width: 100%;
+  position: relative;
+  z-index: 46;
+}
+
+.hero-title-editor.hidden {
+  display: none !important;
+}
+
+.hero-title-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 42px;
+  box-sizing: border-box;
+  background: rgba(250, 249, 245, 0.98);
+  border: 1.8px solid #111111;
+  border-radius: 11px;
+  padding: 4px 6px 4px 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.hero-title-order-prefix {
+  font-size: 16px;
+  font-weight: 700;
+  color: #6E6D68;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  user-select: none;
+  line-height: 1;
+}
+
+.hero-title-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  color: #111111;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  line-height: 30px;
+}
+
+.hero-title-input::placeholder {
+  color: #8E8D88;
+  font-weight: 500;
+}
+
+.hero-title-set-btn {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: none;
+  background: #111111;
+  color: #FAF9F5;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+
+.hero-title-set-btn:hover {
+  background: #292929;
+}
+
 .hero-subtitle-dropdown-mount .task-assign-dropdown {
   top: 40px;
   left: 0;
   transform: none;
   width: 224px;
+}
+
+.hero-subtitle-wrap.is-editing-title .hero-subtitle-dropdown-mount .task-assign-dropdown {
+  top: 46px;
+  width: 100%;
+  max-width: 260px;
+}
+
+.hero-subtitle-wrap.is-editing-title .hero-subtitle-dropdown-mount .dropdown-custom-header {
+  display: none;
+}
+
+.hero-subtitle-wrap.is-editing-title .hero-subtitle-dropdown-mount .task-assign-dropdown.has-no-task-items {
+  display: none;
 }
 
 .hero-tomato-stage-wrap {
