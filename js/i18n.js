@@ -1,8 +1,8 @@
 /**
- * Fable / Flow — Lightweight i18n (English / Simplified Chinese).
+ * UNTO FLOW — Lightweight i18n (English / Simplified Chinese).
  *
  * Keys are the original English strings (or English templates with {params}),
- * so English is always the fallback. The app name (Fable / Flow), all dates, and
+ * so English is always the fallback. The app name (UNTO FLOW), all dates, and
  * the monthly calendar intentionally stay in English and are NOT listed here.
  */
 
@@ -38,7 +38,7 @@ const ZH = {
   'Click to attach a photo': '点击添加照片',
   'Click to attach a second photo': '点击再加一张照片',
   'Delete item': '删除待办',
-  'Open this tomato timer': '打开这个番茄计时',
+  'Open this tomato timer': '打开这个番茄钟',
   'Click grey tomato to light up and open Timer page': '点击灰色番茄，开始计时',
 
   // ---- Timer ----
@@ -145,14 +145,14 @@ const ZH = {
 
   // ---- Tutorial ----
   'Tap Card or Tomato': '点击卡片或番茄',
-  'Open today’s card or focus timer': '打开今天的卡片或番茄计时',
+  'Open today’s card or focus timer': '打开今天的卡片或番茄钟',
   'Front Page · Daily To-Dos': '卡片正面 · 今日待办',
   'Add up to 8 tasks. Swipe to cross out, swipe again to undo':
     '最多 8 条。划一下完成，再划一下撤销',
   'Flip Page · Daily Reflection': '卡片背面 · 今日回顾',
   'Swipe card to write reflection & attach photos': '滑动卡片翻面，写写今天、放几张照片',
   'Tap Mini Tomato': '点击小番茄',
-  'Link a daily to-do item to a focus timer': '给这条待办开一个番茄计时',
+  'Link a daily to-do item to a focus timer': '给这条待办开一个番茄钟',
   'Turn Tomato Dial': '转动番茄',
   'Swipe across the tomato to turn the dial': '左右拨动番茄，转动转盘',
   'Tap Digits to Type Time': '点数字输入时间',
@@ -202,7 +202,7 @@ const ZH = {
   'Profile and Settings': '个人与设置',
   'Profile, Foley Audio & Workspace Navigation': '个人与设置',
   "Open Today's Index Card": '打开今日卡片',
-  'Open Pomodoro Timer': '打开番茄计时',
+  'Open Pomodoro Timer': '打开番茄钟',
   'Open Card Stack Archive': '打开卡片堆',
   'Open Chronological Card Stack Archive': '打开卡片堆',
   'Flip Card 180 Degrees': '翻转卡片',
@@ -214,7 +214,7 @@ const ZH = {
   'Type minutes (0 to 180) or HH:MM': '输入分钟数或 时:分',
   'Quick duration presets': '常用时长',
   'Tap to assign or change task right on this page': '点击选择或更换待办',
-  'Interactive Heirloom Tomato Timer Dial': '番茄计时转盘',
+  'Interactive Heirloom Tomato Timer Dial': '番茄钟转盘',
   'Switch to 6-Tomato Grid View': '切换到番茄格',
   'Play or Pause Timer': '开始或暂停',
   'End and Reset Timer to 00:00': '结束并重置',
@@ -234,7 +234,7 @@ const ZH = {
   'Account and Cloud Sync': '账号与同步',
   'Close account modal': '关闭',
   'Close': '关闭',
-  'About Fable and Flow': '关于 Fable / Flow',
+  'About UNTO FLOW': '关于 UNTO FLOW',
   'Close about card': '关闭',
   'Guided Tutorial': '教程',
   'Close tutorial': '关闭教程',

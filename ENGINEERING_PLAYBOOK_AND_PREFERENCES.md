@@ -1,3 +1,5 @@
+> Note (Oct 13, 2026): the product is now named **UNTO FLOW** (umbrella brand **UNTO**); older references to Fable / Flow below refer to the same app.
+
 # Engineering Postmortem, Working Preferences & Quality Playbook
 **Prepared for:** Zuqi  
 **Purpose:** Candid root-cause analysis of why *Fable / Flow (Project Focus)* required 25+ back-and-forth correction cycles, paired with a reusable **Product & Visual Preferences Guide + Pre-Handoff QA Checklist** to give your next engineer (or AI coding agent) on Day 1.

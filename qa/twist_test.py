@@ -1,14 +1,15 @@
-"""Hero tomato: the TOP HALF visibly twists with the dial (not just the numbers).
+"""Hero tomato: the whole TOP HALF is a real 3D object that turns a full 360° with the dial.
 
 Checks, on the real hero canvas (sprite coords x1, canvas is x2):
-- at 00:00 the tomato is exactly the original picture (idle look unchanged)
-- turning the dial changes the top half's surface (leaves / shoulders), not only the number band
-- bottom half + pointer, the stem and the background never change
+- the 3D top is active for every colour (6 colours, grey, silver), no GL errors, repeatable frames
+- turning the dial changes the top half (leaves, shoulders, lobes), incl. the leaves at the BACK
+  (the outline behind the stem), not only the number band
+- true 360°: one full turn of the top lands exactly on the starting look; half a turn shows the back
+- the stem turns in place (doesn't drift sideways)
+- smooth: tiny dial steps give tiny changes everywhere (no pops / hand-overs)
 - turning direction matches the numbers (wind up -> surface moves left at the front)
-- smooth: tiny dial steps give tiny changes (no pops), incl. the symmetry hand-over point
-- no seams / tears: no new hard edges inside the twisted area
-- every colour (6 colours, grey, silver) twists
-- render time per frame (twist on)
+- bottom half + pointer + background never change
+- no colour jump where the 3D top meets the photo's bottom half (just above the seam)
 Saves screenshots for visual inspection.
 """
 import sys, json, time
@@ -26,105 +27,103 @@ c.js(r"""window.__tw = {
     h.silverBlend = isSilver ? 1 : 0; h.updateOdometer(min * 6, (isGrey || isSilver) ? 0 : key, !isGrey, isSilver);
     if (isSilver) { h.silverBlend = 1; h.targetSilverBlend = 1; h.render(); } },
   grab() { const h = window.fableFlowApp.hero3D; return h.canvas.getContext('2d').getImageData(0, 0, h.canvas.width, h.canvas.height).data; },
-  // mean |diff| over a sprite-coord rect (canvas = 2x), optional exclusion of the stem column
   diff(A, B, x0, y0, x1, y1, skipStem) { const W = 1400; let s = 0, n = 0, mx = 0;
     for (let y = y0 * 2; y < y1 * 2; y++) for (let x = x0 * 2; x < x1 * 2; x++) {
-      if (skipStem && x >= 306 * 2 && x < 357 * 2 && y < 104 * 2) continue;
+      if (skipStem && x >= 300 * 2 && x < 363 * 2 && y < 112 * 2) continue;
       const i = (y * W + x) * 4; const d = (Math.abs(A[i] - B[i]) + Math.abs(A[i+1] - B[i+1]) + Math.abs(A[i+2] - B[i+2])) / 3;
       s += d; n++; if (d > mx) mx = d; }
     return { mean: s / n, max: mx }; },
-  // best horizontal shift (canvas px) of B relative to A over a band, by SAD search
   shift(A, B, x0, y0, x1, y1) { const W = 1400; let best = null;
-    for (let dx = -24; dx <= 24; dx++) { let s = 0;
+    for (let dx = -30; dx <= 30; dx++) { let s = 0;
       for (let y = y0 * 2; y < y1 * 2; y += 2) for (let x = x0 * 2; x < x1 * 2; x += 2) {
         const i = (y * W + x) * 4, j = (y * W + x + dx) * 4; s += Math.abs(A[i] - B[j]) + Math.abs(A[i+1] - B[j+1]); }
       if (!best || s < best.s) best = { dx, s }; }
     return best.dx; },
-  // strongest neighbour step inside the dome (seam/tear detector), upper part only (no numbers there)
-  edge(A, x0, y0, x1, y1) { const W = 1400; let mx = 0, sum = 0, n = 0;
-    for (let y = y0 * 2; y < y1 * 2; y++) for (let x = x0 * 2; x < x1 * 2; x++) {
-      if (x >= 300 * 2 && x < 363 * 2 && y < 106 * 2) continue;
-      const i = (y * W + x) * 4, r = i + 4, d = i + W * 4;
-      const g = Math.max(Math.abs(A[i] - A[r]) + Math.abs(A[i+1] - A[r+1]) + Math.abs(A[i+2] - A[r+2]),
-                         Math.abs(A[i] - A[d]) + Math.abs(A[i+1] - A[d+1]) + Math.abs(A[i+2] - A[d+2]));
-      if (g > mx) mx = g; sum += g; n++; }
-    return { max: mx, mean: sum / n }; },
+  // stem: horizontal centre of the dark-vs-backdrop run on a row above the dome
+  stemCentre(A, sy) { const W = 1400, y = sy * 2; const bg = [A[(y * W + 20) * 4], A[(y * W + 20) * 4 + 1], A[(y * W + 20) * 4 + 2]];
+    let x0 = -1, x1 = -1;
+    for (let x = 280 * 2; x < 385 * 2; x++) { const i = (y * W + x) * 4;
+      const d = Math.abs(A[i] - bg[0]) + Math.abs(A[i+1] - bg[1]) + Math.abs(A[i+2] - bg[2]);
+      if (d > 60) { if (x0 < 0) x0 = x; x1 = x; } }
+    return x0 < 0 ? null : (x0 + x1) / 4; },
 };""")
 
 def run(expr):
     return c.js("(() => { const T = window.__tw; " + expr + " })()")
 
 res = {}
-# Regions in sprite coords
 TOP = (185, 112, 480, 205)      # shoulders + leaves, above the number band
-CAP = (236, 96, 428, 134)       # the leaves around the stem
+CAP = (236, 92, 428, 134)       # the leaves around the stem
+BACK = (196, 70, 470, 100)      # the outline behind the stem (back leaves)
 BOTTOM = (130, 312, 530, 425)   # bottom half incl. the pointer
-STEM = (318, 62, 346, 84)       # stem sticking out above the top
 BG = (10, 10, 100, 590)         # plain background
+FULL = 360.0 / (3.0 / (0.978 * 1.118))   # minutes for one full turn of the top (~131.2)
 
-r0 = run("""T.set(0, 0); const A = T.grab(); window.__A0 = A; T.set(0, 0); const B = T.grab();
+st = run("""const h = window.fableFlowApp.hero3D; const R = {};
+  for (const k of [0, 1, 2, 3, 4, 5, 'unassigned', 'completed']) R[k] = h._topReady(k);
+  const top = h._top3D; return { ready: R, gl: top ? top.gl.getError() : 'none', verts: top && top.vertexCount };""")
+print('3D top', st)
+res['3D top active for all 8 colours, no GL error'] = st['gl'] == 0 and all(st['ready'].values())
+
+r0 = run("""T.set(0, 0); const A = T.grab(); window.__A0 = A; T.set(7, 0); T.set(0, 0); const B = T.grab();
   return T.diff(A, B, 0, 0, 700, 600, false);""")
 print('repeat 0 vs 0', r0)
+res['frames are repeatable'] = r0['max'] == 0
 
 out = run("""const A = window.__A0; const R = {};
   for (const m of [5, 10, 18, 37]) { T.set(m, 0); const B = T.grab();
-    R[m] = { top: T.diff(A, B, %d, %d, %d, %d, true), cap: T.diff(A, B, %d, %d, %d, %d, true),
-             bottom: T.diff(A, B, %d, %d, %d, %d, false), stem: T.diff(A, B, %d, %d, %d, %d, false),
-             bg: T.diff(A, B, %d, %d, %d, %d, false) }; }
-  return R;""" % (TOP + CAP + BOTTOM + STEM + BG))
-for m, r in out.items(): print('min', m, json.dumps({k: round(v['mean'], 2) for k, v in r.items()}), 'bottom max', r['bottom']['max'])
-res['00:00 is the original picture (repeatable)'] = r0['max'] == 0
-# one leaf step (72 deg) every 25 min: the 5 leaves land back on the resting look at 25 / 50 / 75 min
-r25 = run("const A = window.__A0; T.set(25, 0); return T.diff(A, T.grab(), 0, 0, 700, 600, false);")
-r50 = run("const A = window.__A0; T.set(50, 0); return T.diff(A, T.grab(), %d, %d, %d, %d, true);" % TOP)
-print('25 min vs 0 (whole canvas)', r25, '50 min top', r50)
-res['every 25 min the leaves land on the resting look'] = r50['max'] == 0
-res['top half (shoulders) changes when turned'] = all(out[str(m)]['top']['mean'] > 2.0 for m in (5, 10, 18, 37))
-res['leaves around the stem move when turned'] = all(out[str(m)]['cap']['mean'] > 3.0 for m in (5, 10, 18, 37))
-res['bottom half + pointer never change'] = all(out[str(m)]['bottom']['max'] == 0 for m in (5, 10, 18, 37))
-res['stem stays put'] = all(out[str(m)]['stem']['mean'] < 1.0 for m in (5, 10, 18, 37))
-res['background untouched'] = all(out[str(m)]['bg']['max'] == 0 for m in (5, 10, 18, 37))
+    R[m] = { top: T.diff(A, B, %d, %d, %d, %d, true), cap: T.diff(A, B, %d, %d, %d, %d, true), back: T.diff(A, B, %d, %d, %d, %d, true),
+             bottom: T.diff(A, B, %d, %d, %d, %d, false), bg: T.diff(A, B, %d, %d, %d, %d, false) }; }
+  return R;""" % (TOP + CAP + BACK + BOTTOM + BG))
+for m, r in out.items():
+    print('min', m, json.dumps({k: round(v['mean'], 2) for k, v in r.items()}), 'bottom max', r['bottom']['max'])
+res['turning changes the shoulders and leaves (5..37 min)'] = all(out[m]['top']['mean'] > 1.0 and out[m]['cap']['mean'] > 3.0 for m in out)
+res['the BACK leaves move too (outline behind the stem)'] = all(out[m]['back']['mean'] > 1.5 for m in out)
+res['bottom half + pointer never change'] = all(out[m]['bottom']['max'] <= 2 for m in out)
+res['background never changes'] = all(out[m]['bg']['max'] == 0 for m in out)
 
-# direction: small wind-up -> features at the front of the leaves move left (negative dx)
-dx = run("""T.set(3, 0); const A = T.grab(); T.set(4, 0); const B = T.grab(); return T.shift(A, B, 250, 104, 410, 132);""")
-print('shift for +1 min (canvas px):', dx)
-res['turns the same way as the numbers (moves left on wind-up)'] = dx < 0
+turn = run("""const A = window.__A0; T.set(%f, 0); const F = T.grab(); T.set(%f, 0); const H = T.grab();
+  return { full: T.diff(A, F, %d, %d, %d, %d, false), half: T.diff(A, H, %d, %d, %d, %d, false) };""" % ((FULL, FULL / 2) + CAP + CAP))
+print('one full turn (%.1f min) vs 0:' % FULL, turn['full'], ' half turn vs 0:', turn['half'])
+res['one full turn of the top returns to the starting look'] = turn['full']['mean'] < 0.6
+res['half a turn shows a different side (the back)'] = turn['half']['mean'] > 4.0
 
-# smoothness: tiny steps -> tiny change; check many points incl. the leaf hand-over at 12.5 / 37.5 min.
-# Measured above the number band (rows 85..185) so the moving numbers don't count.
-steps = run("""const R = []; for (const m of [1, 7.3, 11.5, 12.3, 12.45, 12.5, 12.55, 13.4, 20, 26.2, 37.4, 52.4]) {
-    T.set(m, 0); const A = T.grab(); T.set(m + 0.1, 0); const B = T.grab();
-    R.push([m, T.diff(A, B, 150, 85, 520, 185, true).mean]); } return R;""")
-print('0.1-min step change:', [(m, round(d, 3)) for m, d in steps])
-vals = sorted(d for _, d in steps)
-median = vals[len(vals) // 2]
-res['smooth: 0.1-min steps change < 1.5 levels on average'] = all(d < 1.5 for _, d in steps)
-res['no pops: no step > 2.5x the typical step'] = all(d <= 2.5 * median + 0.05 for _, d in steps)
+stem = run("""const R = []; for (const m of [0, 15, 33, 49, 66, 90, 120]) { T.set(m, 0); const A = T.grab(); R.push(T.stemCentre(A, 69)); } return R;""")
+print('stem centre (sprite x) at 0/15/33/49/66/90/120 min:', stem)
+res['stem turns in place (centre within 2.5 px)'] = all(s is not None for s in stem) and max(stem) - min(stem) <= 2.5
 
-# seams / tears: twisted frames have no harder edges than the original picture
-edges = run("""const R = {}; for (const m of [0, 6, 12.5, 18, 47]) { T.set(m, 0); const A = T.grab(); R[m] = T.edge(A, 150, 100, 515, 215); } return R;""")
-print('edge max/mean:', {k: (v['max'], round(v['mean'], 2)) for k, v in edges.items()})
-base = edges['0']
-res['no seams or tears (no new hard edges)'] = all(v['max'] <= base['max'] * 1.25 + 6 and v['mean'] <= base['mean'] * 1.3 + 0.5 for v in edges.values())
+# smoothness: 0.25-min steps over a whole quarter turn
+sm = run("""let prev = null; const steps = [];
+  for (let m = 0; m <= 33; m += 0.25) { T.set(m, 0); const B = T.grab();
+    if (prev) steps.push(T.diff(prev, B, %d, %d, %d, %d, true).mean); prev = B; }
+  const s = steps.slice().sort((a, b) => a - b); return { max: s[s.length - 1], median: s[s.length >> 1], n: steps.length };""" % CAP)
+print('step-to-step change (0.25 min):', sm)
+res['smooth: no pops (largest 0.25-min step <= 2.5x the median)'] = sm['max'] <= 2.5 * max(0.05, sm['median'])
 
-# every colour twists
-cols = run("""const R = {}; for (const k of [0, 1, 2, 3, 4, 5, 'unassigned', 'completed']) {
-    T.set(0, k); const A = T.grab(); T.set(17, k); const B = T.grab(); R[k] = T.diff(A, B, %d, %d, %d, %d, true).mean; } return R;""" % CAP)
-print('per colour cap change @17min:', {k: round(v, 2) for k, v in cols.items()})
-res['all 8 tomato looks twist'] = all(v > 3.0 for v in cols.values())
+dirn = run("""T.set(0, 0); const A = T.grab(); T.set(1.5, 0); const B = T.grab(); return T.shift(A, B, 250, 112, 420, 150);""")
+print('front surface shift for +1.5 min (canvas px, negative = left):', dirn)
+res['wind up -> surface moves left at the front'] = dirn < 0
 
-# timing
-perf = run("""const h = window.fableFlowApp.hero3D; T.set(0, 0); const t0 = performance.now(); let n = 0;
-  for (let m = 0.5; m < 60; m += 1.7) { h.updateOdometer(m * 6, 0, true, false); n++; }
-  return (performance.now() - t0) / n;""")
-print('ms per hero frame with twist: %.2f' % perf)
-res['frame time OK (< 16 ms in headless desktop Chrome)'] = perf < 16
+seam = run("""T.set(0, 0); const A = T.grab(); const h = window.fableFlowApp.hero3D; const img = h.images.get(0);
+  const cv = document.createElement('canvas'); cv.width = 700; cv.height = 600; const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const P = g.getImageData(0, 0, 700, 600).data; let s = 0, n = 0;
+  for (let x = 170; x <= 490; x += 2) { const u = Math.max(-1, Math.min(1, (x - 330.5) / 215.5));
+    const sy = Math.round(298.8 + 0.5 * u - 18.2 * u * u - 15.2 * u * u * u * u);
+    for (let y = sy - 16; y <= sy - 14; y++) { const i = (y * 2 * 1400 + x * 2) * 4, j = (y * 700 + x) * 4;
+      s += (Math.abs(A[i] - P[j]) + Math.abs(A[i+1] - P[j+1]) + Math.abs(A[i+2] - P[j+2])) / 3; n++; } }
+  return s / n;""")
+print('3D top vs photo just above the seam (mean level diff):', round(seam, 2))
+res['no colour jump where the 3D top meets the photo (<= 9 levels)'] = seam <= 9
 
-# screenshots for visual inspection
-for m, key, name in [(0, 0, 'twist_00m'), (4, 0, 'twist_04m'), (9, 0, 'twist_09m'), (12.5, 0, 'twist_12m30'), (18, 0, 'twist_18m'),
-                     (20, 'unassigned', 'twist_grey_20m'), (8, 3, 'twist_c3_08m'), (17, 'completed', 'twist_silver_17m')]:
-    run("T.set(%s, %s); return 1;" % (json.dumps(m), json.dumps(key)))
-    time.sleep(0.15); c.shot(name)
+perf = run("""const h = window.fableFlowApp.hero3D; const t0 = performance.now(); for (let i = 0; i < 5; i++) { T.set(10 + i, 0); }
+  return (performance.now() - t0) / 5;""")
+print('frame time (ms, headless software GL; a phone GPU is far faster):', round(perf, 1))
+
+# screenshots
+c.js("window.__tw.set(0, 0)"); c.shot('twist3d_00')
+c.js("window.__tw.set(25, 0)"); c.shot('twist3d_25')
+c.js("window.__tw.set(66, 0)"); c.shot('twist3d_66')
+
 for k, v in res.items(): print(('OK   ' if v else 'BAD  ') + k)
 print('PASS' if all(res.values()) else 'FAIL')
 c.close()

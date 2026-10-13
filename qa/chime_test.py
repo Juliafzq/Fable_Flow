@@ -8,7 +8,10 @@ C  any tap silences the ringing
 D  coming back long after it finished (phone was asleep): one soft chime, not the full alarm
 E  ending a timer yourself (stop button): one chime, as before
 F  sound off: no bell at all
-Not verifiable here: real iPhone background / lock-screen behaviour.
+G  audio paused by the system (iOS background): the bell is NOT queued to burst out later on some
+   random tap; it plays only if the audio comes back within ~1.5 s
+H  audio stuck after the background: the next tap starts a fresh audio context, and the bell works
+Not verifiable here: real iPhone background / lock-screen behaviour, Silent mode.
 """
 import sys, json, time
 sys.path.insert(0, '.')
@@ -28,6 +31,11 @@ c.js("""(() => { const a = window.fableFlowApp; document.getElementById('about-m
     S._scheduleBellRing = function (ctx, when, dest) { window.__strikes.push({ when, at: ctx.currentTime }); return ob(ctx, when, dest); }; }
   a.renderAll(); })()""")
 time.sleep(0.4)
+# a real tap first, like a person starting a timer: unlocks audio (autoplay policy)
+c.call('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': 30, 'y': 790}]}); time.sleep(0.05)
+c.call('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+time.sleep(0.4)
+print('audio after first tap:', c.js("window.fableFlowApp.sensory.audioCtx && window.fableFlowApp.sensory.audioCtx.state"))
 
 def reset_log():
     c.js("window.__rings = []; window.__strikes = [];")
@@ -125,6 +133,47 @@ st = c.js("window.fableFlowApp.state.timers[4].runState")
 print('F', st, 'strikes', len(lf['strikes']))
 res['F sound off: finishes silently'] = st == 'completed' and len(lf['strikes']) == 0
 c.js("window.fableFlowApp.sensory.isSilentMode = false")
+
+# --- G: audio paused by the system -> no late bell -------------------------------------------
+reset_log()
+c.js("window.fableFlowApp.sensory.audioCtx.suspend()")
+time.sleep(0.2)
+# keep it paused (as iOS does while the app is in the background): block resume() for 2 s
+c.js("""(() => { const ctx = window.fableFlowApp.sensory.audioCtx; const r = ctx.resume.bind(ctx);
+  window.__blockResumeUntil = performance.now() + 2200;
+  ctx.resume = () => performance.now() < window.__blockResumeUntil ? Promise.resolve() : r();
+  window.fableFlowApp.sensory.playCompletionChime(); })()""")
+time.sleep(2.4)
+c.js("window.fableFlowApp.sensory.audioCtx.resume()")   # audio comes back much later (e.g. on a tap)
+time.sleep(0.6)
+lg = log()
+print('G strikes while paused / after late resume:', len(lg['strikes']))
+res['G system-paused audio: no late bell burst'] = len(lg['strikes']) == 0
+# ...but a short pause (audio back within ~1.5 s) still rings
+reset_log()
+c.js("window.fableFlowApp.sensory.audioCtx.suspend()")
+time.sleep(0.2)
+c.js("""(() => { window.__blockResumeUntil = performance.now() + 500; window.fableFlowApp.sensory.playCompletionChime(); })()""")
+time.sleep(1.4)
+lg2 = log()
+print('G short pause strikes:', len(lg2['strikes']))
+res['G audio back within ~1.5 s: bell still rings'] = len(lg2['strikes']) >= 1
+
+# --- H: audio stuck after the background -> next tap starts a fresh context ------------------
+reset_log()
+old_id = c.js("""(() => { const S = window.fableFlowApp.sensory; const ctx = S.audioCtx; ctx.__id = 'old';
+  ctx.suspend(); ctx.resume = () => Promise.resolve(); return ctx.__id; })()""")   # resume() never takes
+time.sleep(0.2)
+for _ in range(2):   # 1st tap tries resume (fails), 2nd tap swaps in a fresh context
+    c.call('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': [{'x': 30, 'y': 790}]}); time.sleep(0.05)
+    c.call('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    time.sleep(0.6)
+st_h = c.js("""(() => { const ctx = window.fableFlowApp.sensory.audioCtx; return { id: ctx.__id || 'new', state: ctx.state }; })()""")
+c.js("window.fableFlowApp.sensory.playCompletionChime()")
+time.sleep(0.4)
+lh = log()
+print('H', st_h, 'strikes', len(lh['strikes']))
+res['H stuck audio: next tap starts a fresh context and the bell works'] = st_h['id'] == 'new' and st_h['state'] == 'running' and len(lh['strikes']) >= 1
 
 for k, v in res.items(): print(('OK   ' if v else 'BAD  ') + k)
 print('PASS' if all(res.values()) else 'FAIL')

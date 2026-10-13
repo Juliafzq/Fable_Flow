@@ -1,7 +1,7 @@
-# Fable / Flow — Publishing & Maintenance Guide (International + Mainland China)
+# UNTO FLOW — Publishing & Maintenance Guide (International + Mainland China)
 
 > **v3 — low-cost, phased, with the monetization plan.** Spend only what's needed now and add paid pieces once there's demand. The monetization plan sits right after the locked decisions; the phases reference it as M1–M12.
-> **Brand setup:** the umbrella name is **being decided**. "Fable Studio" is out because of conflicts (an existing AI studio of that name, a "Fable" hotel chain, crowded lifestyle marks). Placeholders below: **`<brand-domain>`** (e.g. the personal-brand .com) and **`<brand>`**. The app is **Fable / Flow**.
+> **Brand setup (renamed Oct 13, 2026):** the umbrella name is **UNTO** (the earlier "Fable Studio" plan was dropped over name conflicts). The app is **UNTO FLOW** (formerly Fable / Flow). UNTO's domain is **still to be chosen**, so **`<brand-domain>`** (a `.com` for UNTO) stays as a placeholder below.
 > **Owners:** 🧑 = you (accounts, IDs, payments, legal) · 🤖 = me (code, configs, docs, QA).
 > Prices and rules were checked in October 2026 and change over time. ⚠️ marks items to re-verify at the moment you act.
 
@@ -14,7 +14,7 @@
 | **A. Launch lean** | Now → international launch | Apple Developer Program **\$99/yr** + one `.com` domain (**~\$10–15/yr**) + Google Voice (free) | **≈ \$110–115 in year one** |
 | **B. Traction** | A few hundred active users, ~100 paying users, or photos near the free 1 GB | Supabase Pro **\$25/mo**; optional iCloud+ email \$12/yr | +\$300–312/yr |
 | **C. China** | When international shows traction and you want the mainland storefront | Mainland server (from **¥99/yr**), a filable domain if needed; filing itself is free | +~\$15–45/yr |
-| **D. Protect & expand** | Once the brand name is settled and products multiply | Trademarks (CN ≈ ¥300/class, US ≈ \$350/class); P.O. box for EU privacy (optional); Google Play \$25 once | one-off |
+| **D. Protect & expand** | Brand name settled (**UNTO** ✅); once products multiply | Trademarks (CN ≈ ¥300/class, US ≈ \$350/class); P.O. box for EU privacy (optional); Google Play \$25 once | one-off |
 
 **Free or at-cost choices used in Phase A:**
 - **Supabase free tier**, kept awake by a weekly automatic check-in + weekly backup (🤖 sets up via GitHub Actions)
@@ -93,7 +93,7 @@ Free users' daily cards keep being saved, so buying Pro later reveals the whole 
 | Product ID | Type | Price (US) | Display name | Notes |
 |---|---|---|---|---|
 | `flow_trial_14day` | Non-consumable | **\$0** | **"14-Day Trial"** | Apple requires this "XX-day Trial" naming for trials in non-subscription apps |
-| `flow_pro` | Non-consumable | **\$4.99** at launch | "Fable / Flow Pro" | **Family Sharing on** (generous and fits the brand; it can't be turned off once enabled) |
+| `flow_pro` | Non-consumable | **\$4.99** at launch | "UNTO FLOW Pro" | **Family Sharing on** (generous and fits the brand; it can't be turned off once enabled) |
 | `flow_tip_small` | Consumable | \$1.99 | "Small Tip" | Tips unlock nothing; show a thank-you note |
 | `flow_tip_medium` | Consumable | \$4.99 | "Kind Tip" | |
 | `flow_tip_large` | Consumable | \$9.99 | "Generous Tip" | |
@@ -202,7 +202,7 @@ Tips come on top. VAT countries pay out a little less per sale.
 ## Phase 1 — Accounts, identity & brand (week 0–1)
 
 ### 1.1 Domain 🧑
-1. Register the chosen **`.com`** (`<brand-domain>`, ~\$10–15/yr ⚠️).
+1. Pick and register a **`.com`** for **UNTO** (`<brand-domain>`, ~\$10–15/yr ⚠️).
    - **Option 1, register at Alibaba Cloud or Tencent Cloud with real-name verification (Chinese ID):** the same domain can later be ICP-filed for China, since `.com` is filable. One domain for everything.
    - **Option 2, register at Cloudflare (at-cost):** cheapest renewals. Transfer it to a Chinese registrar before Phase C (allowed 60 days after registration).
 2. Turn on auto-renew. **An expired domain breaks email, website and (later) the ICP filing.**
@@ -224,8 +224,8 @@ Either way: add the provider's DNS records (MX, SPF, DKIM), create `hello@` and 
    - **If you don't declare:** the app is removed from the **27 EU storefronts only**; all other countries are unaffected, and you can add the EU later.
 
 ### 1.4 Trademarks 🧑 (Phase D; 🤖 can run the database search first)
-- Settle the umbrella brand name first (see the naming shortlist doc), then file.
-- **China first:** China is first-to-file, so file the umbrella name + "Fable / Flow" in **class 9** (software), plus **39 / 43** (travel, hospitality) once those businesses get close. CNIPA ≈ ¥270–300 per class ⚠️.
+- ~~Settle the umbrella brand name first~~ ✅ **UNTO** chosen. Next: check trademark availability for UNTO in classes **9 / 39 / 43**, then file.
+- **China first:** China is first-to-file, so file the umbrella name "UNTO" + "UNTO FLOW" in **class 9** (software), plus **39 / 43** (travel, hospitality) once those businesses get close. CNIPA ≈ ¥270–300 per class ⚠️.
 - **US:** USPTO (~\$350 per class ⚠️) when budget allows.
 - **Avoid plain "Fable"** as the trademarked mark: crowded name (Fable Studios Inc., Fable Hotels & Resorts, Xbox game series, Fable homeware, a book-club app).
 
@@ -239,11 +239,11 @@ The web app is wrapped as a native iOS app with **Capacitor**, using the same co
 
 | # | Task | Notes |
 |---|---|---|
-| 2.1 | Capacitor iOS project; Bundle ID e.g. **`com.<brand>.flow`** (reverse of your domain; can't be changed after the first upload) | Built in Xcode on your Mac |
+| 2.1 | Capacitor iOS project; Bundle ID e.g. **`com.<brand>.flow`** (reverse of your domain, i.e. based on the UNTO domain once it's registered; can't be changed after the first upload) | Built in Xcode on your Mac |
 | 2.2 | App icon set, launch screen, iPhone-only at first | iPad later |
 | 2.3 | **StoreKit 2 purchases** | `flow_trial_14day` (\$0), `flow_pro` (non-consumable), `flow_tip_small/medium/large` (consumables), **Restore Purchases** button (see M3) |
 | 2.4 | **Trial offer & free tier** | Trial-offer screen after the tour with the required disclosures → \$0 trial purchase; trial date read from the receipt; day-12 note; after 14 days: one card + one tomato with small locks; past cards kept and revealed with Pro (see M2, M4) |
-| 2.5 | **Pro screen, tips & Offer Codes** | One calm Pro screen (what's included, price, Restore); "Support Fable / Flow" row in Profile with 3 tips + thank-you; redeem sheet for the 50 founding codes; all copy EN + 中文 for your review |
+| 2.5 | **Pro screen, tips & Offer Codes** | One calm Pro screen (what's included, price, Restore); "Support UNTO FLOW" row in Profile with 3 tips + thank-you; redeem sheet for the 50 founding codes; all copy EN + 中文 for your review |
 | 2.6 | **Timer-end notification** | Local notification scheduled when a timer starts (the background-timer fix from v55 + a real lock-screen alert) |
 | 2.7 | **Sign-in** | Email + Apple (+ Google internationally). Apple requires **in-app account deletion** for apps with accounts → add "Delete account & data" |
 | 2.8 | **Data export** | GDPR-friendly "Export my data" (JSON / images) |
@@ -307,7 +307,7 @@ The same domain is also your **personal portfolio**: `<brand-domain>` (portfolio
 
 | Item | What to enter |
 |---|---|
-| App record | Name "Fable / Flow" (must be unique; have a backup like "Fable / Flow: Card & Timer"), subtitle, Bundle ID, SKU |
+| App record | Name "UNTO FLOW" (must be unique; have a backup like "UNTO FLOW: Card & Timer"), subtitle, Bundle ID, SKU |
 | Localizations | **English (US)** + **Chinese (Simplified)**: name, subtitle, description, keywords, What's New |
 | Screenshots | Required largest iPhone size (6.9") ⚠️; 3–6 per language; optional preview video |
 | Pricing | App free. In-app purchases per M3: 14-Day Trial \$0, Pro \$4.99, tips \$1.99 / \$4.99 / \$9.99. Family Sharing on for Pro. Each item needs a review screenshot + note. Apple fills in other countries' prices (China is set in Phase 7). |
@@ -334,7 +334,7 @@ The same domain is also your **personal portfolio**: `<brand-domain>` (portfolio
 | 7.1 | Buy a **mainland server** (Shanghai/Beijing region) at the provider holding your domain. Lean start: **Alibaba 2 vCPU/2 GB at ¥99/yr** (same price on renewal; enough for a slim Supabase, i.e. Postgres + Auth + REST, at small scale). Upgrade to 4 GB when needed. | 🧑 | day 1 |
 | 7.2 | **ICP filing for `<brand-domain>`** (individual, `.com` is filable; the domain must sit at a Chinese registrar under your real name): ID, face check in the provider's app, MIIT SMS verification within 24 h, provincial review. Describe it as a personal productivity tool. | 🧑 | 1–3 weeks |
 | 7.3 | Install **self-hosted Supabase** (Docker), same schema/RLS; domestic email sender (DirectMail/SES) for auth mails; daily backups to OSS/COS; HTTPS cert for `api-cn.<brand-domain>` | 🤖 (you provide server access) | 2–3 days |
-| 7.4 | **App备案** for Fable / Flow: app name, Bundle ID, iOS signing public key + SHA-1, backend domain `api-cn.<brand-domain>`, no third-party SDKs that need disclosure (or list them) | 🧑 (🤖 extracts cert values) | 1–3 weeks |
+| 7.4 | **App备案** for UNTO FLOW: app name, Bundle ID, iOS signing public key + SHA-1, backend domain `api-cn.<brand-domain>`, no third-party SDKs that need disclosure (or list them) | 🧑 (🤖 extracts cert values) | 1–3 weeks |
 | 7.5 | China privacy policy (PIPL: purposes, data stored in China, how to delete, contact); first-launch consent dialog | 🤖 | — |
 | 7.6 | App Store Connect: enter the **App备案 number** for the China storefront; Chinese metadata/screenshots; **China prices** (Pro ¥25–30; Chinese Apple IDs pay with Alipay / WeChat Pay); **add mainland China to Availability**; submit an update | 🧑 | 1–2 days review |
 | 7.7 | Show the filing number in the app (About) and on the China website footer | 🤖 | — |
@@ -356,7 +356,7 @@ The same domain is also your **personal portfolio**: `<brand-domain>` (portfolio
 | Shareable moments | "Share today's card" image (Forest-style organic spread); possible future feature |
 | Launch offer | Founding testers get Pro free (Offer Codes); optional launch-week price \$3.99 → \$4.99 (see M5–M6) |
 | Reviews | Gentle in-app review prompt (Apple's `requestReview`) after day 7 or a completed 14-card stack; never during focus |
-| Press kit | Icon, screenshots, 1-paragraph story (`<brand>`), contact email |
+| Press kit | Icon, screenshots, 1-paragraph story (UNTO), contact email |
 
 ---
 
@@ -417,7 +417,7 @@ The same domain is also your **personal portfolio**: `<brand-domain>` (portfolio
 
 | Week | International (Phases A–B) | China (Phase C, later) |
 |---|---|---|
-| 0–1 | Pick brand name → `.com` domain, free email, Apple enrollment, agreements/tax/bank, EU decision | — |
+| 0–1 | ~~Pick brand name~~ (UNTO ✅) → `.com` domain, free email, Apple enrollment, agreements/tax/bank, EU decision | — |
 | 1–4 | iOS build (Capacitor, trial offer, Pro, tips, notifications, deletion, region routing ready but China off) | — |
 | 2–4 | Free-tier backend + keep-alive + weekly backups; portfolio + app website & legal pages | — |
 | 4–6 | In-app products created in App Store Connect; TestFlight with 50 founding users, incl. sandbox purchase tests | — |
@@ -444,7 +444,7 @@ Plus Apple's 15% of sales. One-offs when needed: Google Play \$25, trademarks (C
 ---
 
 ## Your next actions 🧑
-1. **Pick the umbrella name** from the shortlist (`Brand_Name_Shortlist.md`), then register its `.com`.
+1. ~~**Pick the umbrella name**~~ ✅ **UNTO**. Next: register a `.com` for UNTO (`<brand-domain>`), and check trademark availability for UNTO in classes 9 / 39 / 43 before filing (see 1.4).
 2. Set up **free email** (`hello@<brand-domain>`) with Zoho Free or Cloudflare forwarding.
 3. Enroll in the **Apple Developer Program**. Then I start Phase 2 (the iOS wrapper) on a new branch.
 4. Confirm or change the **monetization defaults** (M12): Pro \$4.99, Family Sharing on, no launch promo.

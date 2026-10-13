@@ -10,6 +10,8 @@
  *   at the physical silhouette horizon instead of fading out unnaturally.
  */
 
+import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261013_v57';
+
 export const HEIRLOOM_PALETTE = {
   0: {
     name: 'Deep Crimson',
@@ -91,54 +93,15 @@ export function getTomatoSeamSlope(x) {
 }
 
 /**
- * Top-half twist: when the dial turns, the whole upper half (leaves, shoulders, surface)
- * turns with the numbers, like a real kitchen timer.
- *
- * Geometry (sprite px, measured from the hero sprites): the upper half is a surface of
- * revolution around the stem axis with a flat-shouldered superellipse profile
- * (r/a)^p + (Y/b)^p = 1, seen by an orthographic camera tilted down by e (from the seam
- * ellipse: front drop 33.4 px on a 215.5 px radius). Every visible pixel knows which body
- * point it shows; turning by theta re-samples the picture where that body point was.
- *
- * Light stays put: picture = A (smooth studio light) x D (surface detail); only D turns.
- * The calyx has 5 leaves, so a turn is shown modulo 72 deg, cross-fading between the two
- * nearest equivalent poses. That keeps every frame sampled from the sharp, front-facing
- * part of the picture (no smeared leaves after a quarter turn).
+ * Top-half twist (v57): the top half is a real 3D object (see tomatoTop3D.js) that turns a full
+ * 360° with the dial, lit with the studio light captured from each sprite (matcap). The sprite's
+ * own top half is erased (clean plate) and the 3D top is drawn in its place; the bottom half,
+ * pointer, seam groove and backdrop stay the photo.
  */
-const TWIST = {
-  cx: 331.5, // stem / turning axis (sprite x)
-  ys0: 265.4, // screen y of the axis at the seam plane (= seam side points)
-  sinE: 33.4 / 215.5, // camera tilt
-  a: 216.0, // seam radius
-  b: 175.0, // dome height above the seam plane
-  p: 3.0, // superellipse exponent (flat shoulders)
-  x0: 108, // working box in sprite px
-  y0: 58,
-  x1: 556,
-  y1: 306,
-  // Stem + its collar stay still (they sit on the axis; turning them would only swap their shading)
-  stemX0: 314, // stem shaft column
-  stemX1: 349,
-  stemY1: 94,
-  collarCx: 331.5, // collar where the leaves meet the stem (ellipse)
-  collarCy: 98,
-  collarRx: 25,
-  collarRy: 7.5,
-  // One leaf-step (72 deg) per 25 minutes: within ~5% of the number band's surface speed at the
-  // front (3 / (0.978 * 1.118) = 2.74 deg/min), and every multiple of 25 min shows the original
-  // picture. The hand-over between equivalent poses falls on 12.5, 37.5, 62.5 ... min, away from
-  // the usual 5-minute settings.
-  degPerMinute: 72.0 / 25.0,
-  period: 72.0, // 5 leaves
-  fadeHalfWidth: 3.0, // deg (about +-1 min of dial) cross-fade around the hand-over
-  blurRadius: 18, // 3-pass box blur ~ sigma 18.5 px for the light layer
-  // Only the leaves and shoulders visibly turn: the smooth cheeks look the same at any angle,
-  // and their soft highlight is studio light (it must stay put), not surface detail.
-  latFrom: 120, // body height (px above the seam plane) where turning starts to show
-  latFull: 145, // fully turning from here up to the stem
-};
-
-const INV_D = 1 / 8192; // detail layer fixed-point scale
+const TOP = TOP_GEOMETRY;
+// Surface speed matched to the number band at the front (band uses asin(0.978u) * 1.118, 3 deg/min)
+const TOP_DEG_PER_MINUTE = 3.0 / (0.978 * 1.118);
+const MATCAP_SIZE = 96;
 
 function smoothstep01(t) {
   const x = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -148,32 +111,6 @@ function smoothstep01(t) {
 function twistSeamScreenY(spriteX) {
   // getTomatoSeamY works in band-local coords (sprite = local + (80, 40))
   return getTomatoSeamY(spriteX - 80) + 40;
-}
-
-/** In-place 3-pass separable box blur (sums; caller normalises with a blurred weight map). */
-function boxBlur3(buf, W, H, R) {
-  const tmp = new Float32Array(buf.length);
-  for (let pass = 0; pass < 3; pass++) {
-    for (let y = 0; y < H; y++) {
-      const row = y * W;
-      let acc = 0;
-      for (let x = 0; x < R && x < W; x++) acc += buf[row + x];
-      for (let x = 0; x < W; x++) {
-        if (x + R < W) acc += buf[row + x + R];
-        if (x - R - 1 >= 0) acc -= buf[row + x - R - 1];
-        tmp[row + x] = acc;
-      }
-    }
-    for (let x = 0; x < W; x++) {
-      let acc = 0;
-      for (let y = 0; y < R && y < H; y++) acc += tmp[y * W + x];
-      for (let y = 0; y < H; y++) {
-        if (y + R < H) acc += tmp[(y + R) * W + x];
-        if (y - R - 1 >= 0) acc -= tmp[(y - R - 1) * W + x];
-        buf[y * W + x] = acc;
-      }
-    }
-  }
 }
 
 export class HeroTomato3DView {
@@ -393,7 +330,7 @@ export class HeroTomato3DView {
     });
   }
 
-  /** Prepares the top-half twist in idle moments, so the first turn of the dial doesn't stutter. */
+  /** Prepares the 3D top in idle moments, so the first look at the timer page doesn't stutter. */
   _warmUpTwist() {
     if (this._twWarmStarted) return;
     this._twWarmStarted = true;
@@ -402,9 +339,11 @@ export class HeroTomato3DView {
         ? (fn) => window.requestIdleCallback(fn, { timeout: 2000 })
         : (fn) => setTimeout(fn, 300);
     const steps = [
+      () => this._getTop3D(),
       () => this._twistGeometry(),
-      () => this._twistShared(),
-      () => this._twistLayer(this.isAssigned ? (this.quadrantIndex ?? 0) : 'unassigned'),
+      () => this._topMasks(),
+      () => this._topReady(this.isAssigned ? (this.quadrantIndex ?? 0) : 'unassigned'),
+      () => this._topReady('unassigned'),
     ];
     const runNext = () => {
       const step = steps.shift();
@@ -414,7 +353,7 @@ export class HeroTomato3DView {
       } catch (_) {}
       if (steps.length) idle(runNext);
     };
-    idle(runNext);
+    setTimeout(() => idle(runNext), 6000);
   }
 
   updateOdometer(angleDegrees, quadrantIndex = 0, isAssigned = true, isCompleted = false) {
@@ -469,10 +408,10 @@ export class HeroTomato3DView {
    */
   _twistGeometry() {
     if (this._twGeo) return this._twGeo;
-    const T = TWIST;
+    const T = TOP;
     const cosE = Math.sqrt(1 - T.sinE * T.sinE);
-    const W = T.x1 - T.x0;
-    const H = T.y1 - T.y0;
+    const W = T.box.x1 - T.box.x0;
+    const H = T.box.y1 - T.box.y0;
     const N = W * H;
 
     // Profile from the seam (r = a, Y = 0) to the pole (r = 0, Y = b), ~0.35 px arc steps
@@ -505,7 +444,7 @@ export class HeroTomato3DView {
     const arcZ = new Float32Array(2 * n + 1);
     const arcS = new Float32Array(2 * n + 1);
     for (let bx = 0; bx < W; bx++) {
-      const X = T.x0 + bx - T.cx;
+      const X = T.box.x0 + bx - T.cx;
       const ax = Math.abs(X);
       if (ax >= T.a) continue;
       let k = 0;
@@ -550,7 +489,7 @@ export class HeroTomato3DView {
         const s1 = arcS[j + 1];
         let f = s1 > s0 ? (yRow - s0) / (s1 - s0) : 0;
         f = f < 0 ? 0 : f > 1 ? 1 : f;
-        const by = yRow - T.y0;
+        const by = yRow - T.box.y0;
         if (by < 0 || by >= H) continue;
         const id = by * W + bx;
         cover[id] = 1;
@@ -567,58 +506,57 @@ export class HeroTomato3DView {
   _twistReadSprite(key) {
     const img = this.images.get(key);
     if (!img || !img.complete || !img.naturalWidth) return null;
-    const T = TWIST;
+    const B = TOP.box;
     try {
       const cnv = document.createElement('canvas');
-      cnv.width = T.x1 - T.x0;
-      cnv.height = T.y1 - T.y0;
+      cnv.width = B.x1 - B.x0;
+      cnv.height = B.y1 - B.y0;
       const cctx = cnv.getContext('2d', { willReadFrequently: true });
-      cctx.drawImage(img, -T.x0, -T.y0);
+      cctx.drawImage(img, -B.x0, -B.y0);
       return cctx.getImageData(0, 0, cnv.width, cnv.height).data;
     } catch (_) {
       return null;
     }
   }
 
+  _getTop3D() {
+    if (this._top3D && this._top3D.gl && this._top3D.gl.isContextLost()) {
+      this._top3D = undefined;
+      this._cleanPlates = undefined;
+    }
+    if (this._top3D === undefined) this._top3D = TomatoTop3D.create();
+    return this._top3D;
+  }
+
   /**
-   * Shared by all colours (same sculpt): which pixels turn and how much (soft fade at the outline,
-   * the seam groove, the stem and down the smooth cheeks), and how far surface detail is trusted.
-   * The outline is read from a deep-coloured sprite, which stands out clearly from the backdrop
-   * (pale silver highlights would not).
+   * Shared by all colours (same sculpt): tomato-vs-backdrop mask of the working box (read from a
+   * deep-coloured sprite, which stands out clearly from the backdrop), distance to the outline,
+   * and the seam line per column.
    */
-  _twistShared() {
-    if (this._twShared) return this._twShared;
+  _topMasks() {
+    if (this._twMasks !== undefined) return this._twMasks;
     const refKey = [0, 2, 5, 1, 4, 3, 'unassigned'].find((k) => this.images.get(k));
     if (refKey === undefined) return null;
     const src = this._twistReadSprite(refKey);
     if (!src) {
-      this._twShared = false;
+      this._twMasks = false;
       return false;
     }
-    const T = TWIST;
-    const G = this._twistGeometry();
-    const { W, H, N, cover } = G;
-    const cosE = Math.sqrt(1 - T.sinE * T.sinE);
+    const B = TOP.box;
+    const W = B.x1 - B.x0;
+    const H = B.y1 - B.y0;
+    const N = W * H;
     const bgR = src[0];
     const bgG = src[1];
     const bgB = src[2];
     const seamY = new Float32Array(W);
-    for (let bx = 0; bx < W; bx++) seamY[bx] = twistSeamScreenY(T.x0 + bx);
-
-    // Tomato pixels (the groove and bottom half count as tomato, so only the real outline is an edge)
+    for (let bx = 0; bx < W; bx++) seamY[bx] = twistSeamScreenY(B.x0 + bx);
     const solid = new Uint8Array(N);
-    for (let by = 0; by < H; by++) {
-      const y = T.y0 + by;
-      for (let bx = 0; bx < W; bx++) {
-        const id = by * W + bx;
-        const i = id * 4;
-        const d =
-          Math.abs(src[i] - bgR) + Math.abs(src[i + 1] - bgG) + Math.abs(src[i + 2] - bgB);
-        if (d > 30 && (cover[id] || y > seamY[bx] - 3)) solid[id] = 1;
-      }
+    for (let id = 0; id < N; id++) {
+      const i = id * 4;
+      const d = Math.abs(src[i] - bgR) + Math.abs(src[i + 1] - bgG) + Math.abs(src[i + 2] - bgB);
+      if (d > 30) solid[id] = 1;
     }
-
-    // Distance (px) to the outline: two-pass chamfer
     const dist = new Float32Array(N);
     for (let id = 0; id < N; id++) dist[id] = solid[id] ? 1e6 : 0;
     for (let by = 0; by < H; by++) {
@@ -649,216 +587,362 @@ export class HeroTomato3DView {
         dist[id] = d;
       }
     }
-
-    // wTwist: how much of the turned picture shows. vDetail: how far surface detail is trusted.
-    const wTwist = new Float32Array(N);
-    const vDetail = new Float32Array(N);
-    for (let by = 0; by < H; by++) {
-      const y = T.y0 + by;
-      for (let bx = 0; bx < W; bx++) {
-        const id = by * W + bx;
-        if (!cover[id] || !solid[id]) continue;
-        const x = T.x0 + bx;
-        const up = seamY[bx] - y;
-        const sdx = Math.max(T.stemX0 - x, 0, x - T.stemX1);
-        const sdy = Math.max(y - T.stemY1, 0);
-        const ex = (x - T.collarCx) / T.collarRx;
-        const ey = (y - T.collarCy) / T.collarRy;
-        const collarD = Math.max(0, Math.sqrt(ex * ex + ey * ey) - 1) * T.collarRy;
-        const stemD = Math.min(Math.hypot(sdx, sdy), collarD); // px outside stem + collar
-        const e = dist[id];
-        const lat = (T.ys0 - G.gC[id]) / cosE; // body height above the seam plane
-        wTwist[id] =
-          smoothstep01((e - 3) / 5) *
-          smoothstep01((up - 6) / 7) *
-          smoothstep01(stemD / 6) *
-          smoothstep01((lat - T.latFrom) / (T.latFull - T.latFrom));
-        vDetail[id] =
-          smoothstep01((e - 3) / 4) * smoothstep01((up - 5) / 5) * smoothstep01((stemD - 1) / 5);
-      }
-    }
-
-    const list = [];
-    for (let id = 0; id < N; id++) if (wTwist[id] > 0.002) list.push(id);
-    const cnt = list.length;
-    const idx = new Int32Array(list);
-    const lx = new Float32Array(cnt);
-    const lz = new Float32Array(cnt);
-    const lc = new Float32Array(cnt);
-    const lw = new Uint8ClampedArray(cnt);
-    for (let q = 0; q < cnt; q++) {
-      const id = idx[q];
-      lx[q] = G.gX[id];
-      lz[q] = G.gZ[id];
-      lc[q] = G.gC[id];
-      lw[q] = Math.round(wTwist[id] * 255);
-    }
-    this._twShared = { vDetail, idx, lx, lz, lc, lw, cnt };
-    return this._twShared;
+    this._twMasks = { W, H, N, solid, dist, seamY };
+    return this._twMasks;
   }
 
-  /** Per-colour light layer A (weighted blur) and detail layer D = picture / A (1 = no detail). */
-  _twistLayer(key) {
-    if (!this._twLayers) this._twLayers = new Map();
-    if (this._twLayers.has(key)) return this._twLayers.get(key);
-    const S = this._twistShared();
-    if (!S) return null;
+  /**
+   * Studio light of sprite `key` as a matcap: the colour of the bare dome for each surface
+   * direction (view-space normal x/y), taken from the photo's smooth top half (leaves, stem,
+   * outline and seam groove left out), median per bin. Directions the photo doesn't show (e.g.
+   * leaf flanks tipped further down than any dome point) come from a smooth fit of the same light
+   * (2nd-order spherical harmonics in linear light), so the whole matcap is plausible.
+   */
+  _buildMatcap(key) {
+    const top = this._getTop3D();
+    const M = this._topMasks();
     const src = this._twistReadSprite(key);
-    if (!src) return null;
-    const T = TWIST;
-    const { W, H, N } = this._twGeo;
-    const vDetail = S.vDetail;
+    if (!top || !M || !src) return null;
+    const Gm = this._twistGeometry();
+    const { W, H, N } = M;
+    const B = TOP.box;
+    const cosE = Math.sqrt(1 - TOP.sinE * TOP.sinE);
 
-    const den = new Float32Array(N);
-    const nr = new Float32Array(N);
-    const ng = new Float32Array(N);
-    const nb = new Float32Array(N);
-    for (let id = 0; id < N; id++) {
-      const v = vDetail[id];
-      if (v <= 0) continue;
-      const i = id * 4;
-      den[id] = v;
-      nr[id] = src[i] * v;
-      ng[id] = src[i + 1] * v;
-      nb[id] = src[i + 2] * v;
-    }
-    const R = T.blurRadius;
-    boxBlur3(den, W, H, R);
-    boxBlur3(nr, W, H, R);
-    boxBlur3(ng, W, H, R);
-    boxBlur3(nb, W, H, R);
-    const A = new Uint8ClampedArray(N * 3);
-    const D = new Uint16Array(N * 3).fill(8192); // detail ratio in 1/8192 steps (8192 = 1.0)
-    for (let id = 0; id < N; id++) {
-      const i = id * 4;
-      const k = id * 3;
-      const dn = den[id];
-      let ar = src[i];
-      let ag = src[i + 1];
-      let ab = src[i + 2];
-      if (dn > 1e-3) {
-        ar = nr[id] / dn;
-        ag = ng[id] / dn;
-        ab = nb[id] / dn;
+    // keep the photo's leaves (where the 3D leaves sit at dial 0), their shadows and the stem out
+    const excl = new Uint8Array(N);
+    const mark = (cx, cy, rad) => {
+      const x0 = Math.max(0, Math.floor(cx - B.x0 - rad));
+      const x1 = Math.min(W - 1, Math.ceil(cx - B.x0 + rad));
+      const y0 = Math.max(0, Math.floor(cy - B.y0 - rad));
+      const y1 = Math.min(H - 1, Math.ceil(cy - B.y0 + rad + 8));
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const dx = x + B.x0 - cx;
+          const dy = y + B.y0 - cy;
+          // round brush, stretched downward to cover the shadow under the leaf
+          if (dx * dx + Math.pow(dy > 0 ? dy / 2.0 : dy, 2) <= rad * rad) excl[y * W + x] = 1;
+        }
       }
-      A[k] = ar;
-      A[k + 1] = ag;
-      A[k + 2] = ab;
-      const v = vDetail[id];
-      if (v > 0) {
-        D[k] = Math.min(65535, Math.round(8192 * (1 + (src[i] / Math.max(ar, 1) - 1) * v)));
-        D[k + 1] = Math.min(65535, Math.round(8192 * (1 + (src[i + 1] / Math.max(ag, 1) - 1) * v)));
-        D[k + 2] = Math.min(65535, Math.round(8192 * (1 + (src[i + 2] / Math.max(ab, 1) - 1) * v)));
+    };
+    top.footprintAtZero().forEach(([x, y]) => mark(x, y, 7));
+    for (let y = 0; y < H; y++) {
+      const sy = y + B.y0;
+      for (let x = 0; x < W; x++) {
+        const sx = x + B.x0;
+        if (sx > 300 && sx < 364 && sy < 124) excl[y * W + x] = 1; // stem, collar and its crevice
       }
     }
 
+    const size = MATCAP_SIZE;
+    const bins = new Array(size * size);
+    const toLin = (c) => {
+      const v = c / 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const toSrgb = (v) => {
+      const x = Math.max(0, v);
+      return 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+    };
+    const shBasis = (x, y, z, out) => {
+      out[0] = 1;
+      out[1] = x;
+      out[2] = y;
+      out[3] = z;
+      out[4] = x * y;
+      out[5] = y * z;
+      out[6] = x * z;
+      out[7] = x * x - y * y;
+      out[8] = 3 * z * z - 1;
+      return out;
+    };
+    const ATA = new Float64Array(81);
+    const ATb = [new Float64Array(9), new Float64Array(9), new Float64Array(9)];
+    const basis = new Float64Array(9);
+    let minLum = Infinity;
+    let maxLum = 0;
+    const { a, b, p } = TOP;
+    for (let id = 0; id < N; id++) {
+      if (!Gm.cover[id] || !M.solid[id] || excl[id] || M.dist[id] < 3) continue;
+      const bx = id % W;
+      const by = (id - bx) / W;
+      if (M.seamY[bx] - (by + B.y0) < 8) continue;
+      const X = Gm.gX[id];
+      const Z = Gm.gZ[id];
+      const Y = (TOP.ys0 - Gm.gC[id]) / cosE;
+      const r = Math.hypot(X, Z);
+      // the cap carries the photo's leaves, their shadows and the well (not in this smooth model);
+      // its upward-facing light comes from the smooth fit instead
+      if (r < 125) continue;
+      // the far side near the top outline carries the photo's back leaves: not light either
+      if (Z < -12) continue;
+      let nr = Math.pow(Math.min(1, r / a), p - 1) / a;
+      let ny = Math.pow(Math.max(0, Y / b), p - 1) / b;
+      const l = Math.hypot(nr, ny) || 1;
+      nr /= l;
+      ny /= l;
+      const wx = (nr * X) / r;
+      const wz = (nr * Z) / r;
+      const vx = wx;
+      const vy = ny * cosE - wz * TOP.sinE;
+      const vz = ny * TOP.sinE + wz * cosE;
+      const u = Math.round(((vx + 1) / 2) * (size - 1));
+      const v = Math.round(((vy + 1) / 2) * (size - 1));
+      if (u < 0 || v < 0 || u >= size || v >= size) continue;
+      const k = v * size + u;
+      const i4 = id * 4;
+      (bins[k] || (bins[k] = [])).push(i4);
+      if ((bx + by) & 1) continue; // every other pixel is plenty for the fit
+      shBasis(vx, vy, vz, basis);
+      const lr = toLin(src[i4]);
+      const lg = toLin(src[i4 + 1]);
+      const lb = toLin(src[i4 + 2]);
+      const lum = 0.3 * lr + 0.59 * lg + 0.11 * lb;
+      if (lum < minLum) minLum = lum;
+      if (lum > maxLum) maxLum = lum;
+      for (let i = 0; i < 9; i++) {
+        const bi = basis[i];
+        ATb[0][i] += bi * lr;
+        ATb[1][i] += bi * lg;
+        ATb[2][i] += bi * lb;
+        for (let j = 0; j < 9; j++) ATA[i * 9 + j] += bi * basis[j];
+      }
+    }
+    // solve (ATA + ridge) c = ATb for each channel (Gaussian elimination, partial pivoting)
+    let tr = 0;
+    for (let i = 0; i < 9; i++) tr += ATA[i * 9 + i];
+    const ridge = (tr / 9) * 2e-3;
+    const solve = (rhs) => {
+      const A = new Float64Array(ATA);
+      const x = new Float64Array(rhs);
+      for (let i = 0; i < 9; i++) A[i * 9 + i] += ridge;
+      for (let c = 0; c < 9; c++) {
+        let piv = c;
+        for (let r = c + 1; r < 9; r++) if (Math.abs(A[r * 9 + c]) > Math.abs(A[piv * 9 + c])) piv = r;
+        if (piv !== c) {
+          for (let j = 0; j < 9; j++) {
+            const t = A[c * 9 + j];
+            A[c * 9 + j] = A[piv * 9 + j];
+            A[piv * 9 + j] = t;
+          }
+          const t = x[c];
+          x[c] = x[piv];
+          x[piv] = t;
+        }
+        const d = A[c * 9 + c] || 1e-12;
+        for (let r = c + 1; r < 9; r++) {
+          const f = A[r * 9 + c] / d;
+          if (!f) continue;
+          for (let j = c; j < 9; j++) A[r * 9 + j] -= f * A[c * 9 + j];
+          x[r] -= f * x[c];
+        }
+      }
+      for (let c = 8; c >= 0; c--) {
+        let sum = x[c];
+        for (let j = c + 1; j < 9; j++) sum -= A[c * 9 + j] * x[j];
+        x[c] = sum / (A[c * 9 + c] || 1e-12);
+      }
+      return x;
+    };
+    const coef = [solve(ATb[0]), solve(ATb[1]), solve(ATb[2])];
+    const lumLo = Number.isFinite(minLum) ? minLum * 0.7 : 0;
+    const lumHi = maxLum * 1.08;
+
+    // The photo's dome carries small creases and lobes; read per direction they would print
+    // stripes onto every surface facing that way (stem tip, leaf tops). So: smooth fit everywhere,
+    // plus only the broad, low-frequency difference between the photo and the fit.
+    const fitCol = new Float32Array(size * size * 3);
+    const resid = new Float32Array(size * size * 3);
+    const rw = new Float32Array(size * size);
+    const med = (arr, c) => {
+      const vals = arr.map((i) => src[i + c]).sort((x, y) => x - y);
+      return vals[vals.length >> 1];
+    };
+    for (let v = 0; v < size; v++) {
+      for (let u = 0; u < size; u++) {
+        let x = (u / (size - 1)) * 2 - 1;
+        let y = (v / (size - 1)) * 2 - 1;
+        const rr = Math.hypot(x, y);
+        if (rr > 0.999) {
+          x *= 0.999 / rr;
+          y *= 0.999 / rr;
+        }
+        // Only the upper half of the sphere has photo samples; for downward-tipped normals
+        // (y < 0.14), evaluate the fit at the sampled rim and gently shade downward.
+        const yEval = Math.max(0.14, y);
+        let xEval = x;
+        const rEval = Math.hypot(xEval, yEval);
+        if (rEval > 0.999) xEval *= 0.999 / rEval;
+        const zEval = Math.sqrt(Math.max(0, 1 - xEval * xEval - yEval * yEval));
+        shBasis(xEval, yEval, zEval, basis);
+        const underShade = y < 0.14 ? 1 - 0.18 * Math.min(1, (0.14 - y) / 0.85) : 1;
+        const lin = [0, 0, 0];
+        for (let c = 0; c < 3; c++) {
+          let sum = 0;
+          for (let i = 0; i < 9; i++) sum += coef[c][i] * basis[i];
+          lin[c] = Math.max(0, sum) * underShade;
+        }
+        // keep the extrapolated light within the photo's own range (no blow-outs, no black)
+        const lum = 0.3 * lin[0] + 0.59 * lin[1] + 0.11 * lin[2];
+        const k = lum > 1e-6 ? Math.min(lumHi, Math.max(lumLo * underShade, lum)) / lum : 1;
+        const t = v * size + u;
+        for (let c = 0; c < 3; c++) fitCol[t * 3 + c] = toSrgb(lin[c] * k);
+        const arr = bins[t];
+        if (arr && arr.length >= 2) {
+          const w = Math.min(1, arr.length / 6);
+          rw[t] = w;
+          for (let c = 0; c < 3; c++) resid[t * 3 + c] = (med(arr, c) - fitCol[t * 3 + c]) * w;
+        }
+      }
+    }
+    // wide separable Gaussian (sigma ~7 texels) of the weighted residual and of the weights
+    const sigma = 7;
+    const R = Math.ceil(sigma * 2.5);
+    const kern = [];
+    for (let i = -R; i <= R; i++) kern.push(Math.exp(-(i * i) / (2 * sigma * sigma)));
+    const blur = (arr, ch) => {
+      const tmp = new Float32Array(arr.length);
+      const out = new Float32Array(arr.length);
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          for (let c = 0; c < ch; c++) {
+            let acc = 0;
+            for (let i = -R; i <= R; i++) {
+              const xx = x + i;
+              if (xx < 0 || xx >= size) continue;
+              acc += arr[(y * size + xx) * ch + c] * kern[i + R];
+            }
+            tmp[(y * size + x) * ch + c] = acc;
+          }
+        }
+      }
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          for (let c = 0; c < ch; c++) {
+            let acc = 0;
+            for (let i = -R; i <= R; i++) {
+              const yy = y + i;
+              if (yy < 0 || yy >= size) continue;
+              acc += tmp[(yy * size + x) * ch + c] * kern[i + R];
+            }
+            out[(y * size + x) * ch + c] = acc;
+          }
+        }
+      }
+      return out;
+    };
+    const residB = blur(resid, 3);
+    const wB = blur(rw, 1);
+    let wMax = 0;
+    for (let t = 0; t < size * size; t++) wMax = Math.max(wMax, wB[t]);
+    const cur = new Float32Array(size * size * 3);
+    for (let t = 0; t < size * size; t++) {
+      const cover = wMax > 0 ? Math.min(1, wB[t] / (0.35 * wMax)) : 0; // fades out away from photo data
+      for (let c = 0; c < 3; c++) {
+        const corr = wB[t] > 1e-6 ? residB[t * 3 + c] / wB[t] : 0;
+        cur[t * 3 + c] = fitCol[t * 3 + c] + corr * cover;
+      }
+    }
+    const rgba = new Uint8Array(size * size * 4);
+    for (let k = 0; k < size * size; k++) {
+      rgba[k * 4] = Math.round(Math.max(0, Math.min(255, cur[k * 3])));
+      rgba[k * 4 + 1] = Math.round(Math.max(0, Math.min(255, cur[k * 3 + 1])));
+      rgba[k * 4 + 2] = Math.round(Math.max(0, Math.min(255, cur[k * 3 + 2])));
+      rgba[k * 4 + 3] = 255;
+    }
+    return { rgba, size };
+  }
+
+  /** The sprite with its top half (incl. leaves and stem) replaced by the backdrop. */
+  _buildCleanPlate(key) {
+    const img = this.images.get(key);
+    const M = this._topMasks();
+    if (!img || !M) return null;
+    const B = TOP.box;
+    const { W, H, solid, seamY } = M;
     const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    const lctx = canvas.getContext('2d');
-    const image = lctx.createImageData(W, H);
-    const layer = { A, D, idx: S.idx, lx: S.lx, lz: S.lz, lc: S.lc, lw: S.lw, cnt: S.cnt, canvas, lctx, image, theta: null };
-    this._twLayers.set(key, layer);
-    return layer;
-  }
-
-  /** Re-samples the detail layer for the two nearest equivalent poses (t1, t2) and writes the layer. */
-  _fillTwistLayer(L, t1, g, t2) {
-    const T = TWIST;
-    const W = this._twGeo.W;
-    const H = this._twGeo.H;
-    const out = L.image.data;
-    const A = L.A;
-    const D = L.D;
-    const r1 = (t1 * Math.PI) / 180;
-    const r2 = (t2 * Math.PI) / 180;
-    const c1 = Math.cos(r1);
-    const s1 = Math.sin(r1);
-    const c2 = Math.cos(r2);
-    const s2 = Math.sin(r2);
-    const w1 = g;
-    const w2 = 1 - g;
-    const useSecond = w2 > 0.001;
-    const cxb = T.cx - T.x0;
-    const sinE = T.sinE;
-    const maxX = W - 1.001;
-    const maxY = H - 1.001;
-    const W3 = W * 3;
-    const { lx, lz, lc, lw, idx, cnt } = L;
-    for (let q = 0; q < cnt; q++) {
-      const X = lx[q];
-      const Z = lz[q];
-      const C = lc[q] - T.y0;
-
-      let sx = cxb + X * c1 + Z * s1;
-      let sy = C + (Z * c1 - X * s1) * sinE;
-      sx = sx < 0 ? 0 : sx > maxX ? maxX : sx;
-      sy = sy < 0 ? 0 : sy > maxY ? maxY : sy;
-      let ix = sx | 0;
-      let iy = sy | 0;
-      let fx = sx - ix;
-      let fy = sy - iy;
-      let i00 = iy * W3 + ix * 3;
-      let i01 = i00 + W3;
-      let a00 = (1 - fx) * (1 - fy);
-      let a10 = fx * (1 - fy);
-      let a01 = (1 - fx) * fy;
-      let a11 = fx * fy;
-      let dr = D[i00] * a00 + D[i00 + 3] * a10 + D[i01] * a01 + D[i01 + 3] * a11;
-      let dg = D[i00 + 1] * a00 + D[i00 + 4] * a10 + D[i01 + 1] * a01 + D[i01 + 4] * a11;
-      let db = D[i00 + 2] * a00 + D[i00 + 5] * a10 + D[i01 + 2] * a01 + D[i01 + 5] * a11;
-
-      if (useSecond) {
-        sx = cxb + X * c2 + Z * s2;
-        sy = C + (Z * c2 - X * s2) * sinE;
-        sx = sx < 0 ? 0 : sx > maxX ? maxX : sx;
-        sy = sy < 0 ? 0 : sy > maxY ? maxY : sy;
-        ix = sx | 0;
-        iy = sy | 0;
-        fx = sx - ix;
-        fy = sy - iy;
-        i00 = iy * W3 + ix * 3;
-        i01 = i00 + W3;
-        a00 = (1 - fx) * (1 - fy);
-        a10 = fx * (1 - fy);
-        a01 = (1 - fx) * fy;
-        a11 = fx * fy;
-        dr = dr * w1 + w2 * (D[i00] * a00 + D[i00 + 3] * a10 + D[i01] * a01 + D[i01 + 3] * a11);
-        dg = dg * w1 + w2 * (D[i00 + 1] * a00 + D[i00 + 4] * a10 + D[i01 + 1] * a01 + D[i01 + 4] * a11);
-        db = db * w1 + w2 * (D[i00 + 2] * a00 + D[i00 + 5] * a10 + D[i01 + 2] * a01 + D[i01 + 5] * a11);
+    canvas.width = this.baseW;
+    canvas.height = this.baseH;
+    const cctx = canvas.getContext('2d', { willReadFrequently: true });
+    cctx.drawImage(img, 0, 0, this.baseW, this.baseH);
+    let data;
+    try {
+      data = cctx.getImageData(B.x0, B.y0, W, H);
+    } catch (_) {
+      return null;
+    }
+    const px = data.data;
+    // erase mask: tomato above the seam blend zone, grown by 2 px to drop the outline's soft edge
+    const erase = new Uint8Array(W * H);
+    for (let by = 0; by < H; by++) {
+      for (let bx = 0; bx < W; bx++) {
+        if (B.y0 + by >= seamY[bx] - 12) continue;
+        let hit = false;
+        for (let dy = -2; dy <= 2 && !hit; dy++) {
+          for (let dx = -2; dx <= 2 && !hit; dx++) {
+            const x = bx + dx;
+            const y = by + dy;
+            if (x >= 0 && y >= 0 && x < W && y < H && solid[y * W + x]) hit = true;
+          }
+        }
+        if (hit) erase[by * W + bx] = 1;
       }
-
-      const id = idx[q];
-      const k = id * 3;
-      const o = id * 4;
-      out[o] = A[k] * dr * INV_D;
-      out[o + 1] = A[k + 1] * dg * INV_D;
-      out[o + 2] = A[k + 2] * db * INV_D;
-      out[o + 3] = lw[q];
     }
-    L.lctx.putImageData(L.image, 0, 0);
+    for (let by = 0; by < H; by++) {
+      let bx = 0;
+      while (bx < W) {
+        if (!erase[by * W + bx]) {
+          bx++;
+          continue;
+        }
+        const start = bx;
+        while (bx < W && erase[by * W + bx]) bx++;
+        const end = bx - 1;
+        const li = (by * W + Math.max(0, start - 2)) * 4;
+        const ri = (by * W + Math.min(W - 1, end + 2)) * 4;
+        const span = Math.max(1, end - start + 2);
+        for (let x = start; x <= end; x++) {
+          const t = (x - start + 1) / span;
+          const o = (by * W + x) * 4;
+          px[o] = px[li] * (1 - t) + px[ri] * t;
+          px[o + 1] = px[li + 1] * (1 - t) + px[ri + 1] * t;
+          px[o + 2] = px[li + 2] * (1 - t) + px[ri + 2] * t;
+        }
+      }
+    }
+    cctx.putImageData(data, B.x0, B.y0);
+    return canvas;
   }
 
-  /** Draws the turned upper half of sprite `key` over it (ctx is in 1x sprite units). */
-  _drawTwistLayer(ctx, key, thetaDeg) {
-    const T = TWIST;
-    const P = T.period;
-    const half = P / 2;
-    const t1 = ((((thetaDeg + half) % P) + P) % P) - half; // nearest equivalent pose, (-36, 36]
-    const a1 = Math.abs(t1);
-    let g = 1;
-    if (a1 > half - T.fadeHalfWidth) {
-      g = 1 - smoothstep01((a1 - (half - T.fadeHalfWidth)) / (2 * T.fadeHalfWidth));
+  /** True when the 3D top can draw colour `key` (builds its light + clean plate on first use). */
+  _topReady(key) {
+    const top = this._getTop3D();
+    if (!top) return false;
+    if (!this._cleanPlates) this._cleanPlates = new Map();
+    if (top.hasMatcap(key) && this._cleanPlates.get(key)) return true;
+    if (!this.images.get(key)) return false;
+    const mc = this._buildMatcap(key);
+    const plate = this._buildCleanPlate(key);
+    if (!mc || !plate) return false;
+    top.setMatcap(key, mc.rgba, mc.size);
+    this._cleanPlates.set(key, plate);
+    return true;
+  }
+
+  /** Draws colour `key` with its top half turned by thetaDeg (ctx in 1x sprite units). */
+  _drawSpriteWithTop(ctx, key, img, thetaDeg) {
+    const heroEl = typeof document !== 'undefined' ? document.getElementById('screen-timer-hero') : null;
+    const heroVisible = !heroEl || !heroEl.classList.contains('hidden');
+    if ((heroVisible || this._top3D || Math.abs(thetaDeg) > 0.01) && this._topReady(key)) {
+      const top = this._top3D;
+      // grain as measured on the sprites: ~2.5% on the matte colours, almost none on polished silver
+      if (top.render(thetaDeg, key, { grain: key === 'completed' ? 0.004 : 0.065 })) {
+        ctx.drawImage(this._cleanPlates.get(key), 0, 0, this.baseW, this.baseH);
+        const B = TOP.box;
+        ctx.drawImage(top.canvas, B.x0, B.y0, B.x1 - B.x0, B.y1 - B.y0);
+        return;
+      }
     }
-    if (g >= 0.9999 && a1 < 0.02) return; // dial at a resting pose: the original picture
-    const layer = this._twistLayer(key);
-    if (!layer) return;
-    const q = Math.round(thetaDeg * 50) / 50;
-    if (layer.theta !== q) {
-      this._fillTwistLayer(layer, t1, g, t1 - (t1 >= 0 ? P : -P));
-      layer.theta = q;
-    }
-    ctx.drawImage(layer.canvas, T.x0, T.y0);
+    ctx.drawImage(img, 0, 0, this.baseW, this.baseH);
   }
 
   /**
@@ -892,12 +976,11 @@ export class HeroTomato3DView {
     const key = this.isAssigned ? (this.quadrantIndex ?? 0) : 'unassigned';
     const drawnKey = this.images.get(key) ? key : 0;
     const img = this.images.get(drawnKey);
-    // The top half turns with the dial at the same surface speed as the numbers
-    const twistDeg = (this.currentAngleDegrees / 6.0) * TWIST.degPerMinute;
+    // The top half turns a full 360° with the dial, at the same surface speed as the numbers
+    const twistDeg = (this.currentAngleDegrees / 6.0) * TOP_DEG_PER_MINUTE;
     if (img && img.complete && sBlend < 0.999) {
       ctx.globalAlpha = 1.0;
-      ctx.drawImage(img, 0, 0, this.baseW, this.baseH);
-      this._drawTwistLayer(ctx, drawnKey, twistDeg);
+      this._drawSpriteWithTop(ctx, drawnKey, img, twistDeg);
     }
 
     // Smoothly cross-dissolve into Satin Silver Metallic Tomato when completed/ended
@@ -905,8 +988,7 @@ export class HeroTomato3DView {
       const silverImg = this.images.get('completed');
       if (silverImg && silverImg.complete) {
         ctx.globalAlpha = sBlend;
-        ctx.drawImage(silverImg, 0, 0, this.baseW, this.baseH);
-        this._drawTwistLayer(ctx, 'completed', twistDeg);
+        this._drawSpriteWithTop(ctx, 'completed', silverImg, twistDeg);
       }
     }
     ctx.restore();

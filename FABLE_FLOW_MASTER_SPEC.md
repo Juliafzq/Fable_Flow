@@ -1,3 +1,5 @@
+> Note (Oct 13, 2026): the product is now named **UNTO FLOW** (umbrella brand **UNTO**); older references to Fable / Flow below refer to the same app.
+
 # Fable / Flow — Master Product Requirements Document (v4.2) & Technical Implementation Plan
 
 > **Authoritative Handoff & Phase 2 Execution Specification:**

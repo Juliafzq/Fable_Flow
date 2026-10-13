@@ -1,5 +1,7 @@
-# Fable / Flow — PRD & Implementation Plan v5
+# UNTO FLOW — PRD & Implementation Plan v5
 
+> Renamed from Fable / Flow to UNTO FLOW on Oct 13, 2026; umbrella brand: UNTO.
+>
 > **Live build:** `v54` · **https://juliafzq.github.io/Fable_Flow/** · repo `Juliafzq/Fable_Flow` (`main`)
 >
 > v5 consolidates the v4.7 baseline (Phase 3, `v36`) with every change shipped on **Oct 11 (v37 → v54)**. Where v5 and v4.7 disagree, **v5 wins**. Sections that didn't change (3D tomato rendering, silver completion state, photo layouts, Supabase backend, cost options) are summarized; their detailed specs in v4.7 still apply.
@@ -39,7 +41,7 @@ The v4.7 principles still hold: mockups beat text, minimal copy, photoreal tomat
 
 ### 3.2 Simplified Chinese (new)
 
-- **Stays in English in both languages:** the name **Fable / Flow**, all dates (`11 OCT`, `SUNDAY — OCT 11`, the date strip), and the monthly calendar.
+- **Stays in English in both languages:** the name **UNTO FLOW**, all dates (`11 OCT`, `SUNDAY — OCT 11`, the date strip), and the monthly calendar.
 - **Never translated:** user-typed text (tasks, reflections, timer titles). The built-in defaults `Example Task` / `Focus Session` display as `示例待办` / `专注时间`.
 - **Persistence:** the choice is saved on the device and in the synced account state (`state.language`).
 - **Approved terms:**

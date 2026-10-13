@@ -27,6 +27,7 @@ n=0
 job() {  # name, mode(pass|json:<expr>), command...
   local name="$1" mode="$2"; shift 2
   n=$((n+1)); local id=$n port=$((BASE + n))
+  while [ "$(jobs -rp | wc -l)" -ge 4 ]; do sleep 0.3; done
   (
     out=$(timeout 150 "${@//PORT/$port}" 2>&1)
     if [ "$mode" = "pass" ]; then

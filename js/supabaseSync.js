@@ -1,5 +1,5 @@
 /**
- * Fable / Flow — Phase 3 Supabase Auth & Cloud Sync Engine
+ * UNTO FLOW — Phase 3 Supabase Auth & Cloud Sync Engine
  *
  * Provides:
  * 1. Direct Supabase GoTrue Auth (/auth/v1/signup, /auth/v1/token, /auth/v1/authorize)

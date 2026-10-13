@@ -38,6 +38,7 @@ class NoCacheHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 class ReusableTCPServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    request_queue_size = 128
 
 with ReusableTCPServer(("127.0.0.1", port), NoCacheHTTPRequestHandler) as httpd:
     httpd.serve_forever()

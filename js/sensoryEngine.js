@@ -44,11 +44,25 @@ export class SensoryEngine {
       if (this._iosUnlocked && this.audioCtx && this.audioCtx.state === 'running') {
         return;
       }
+      // iOS can leave a Home Screen app's audio stuck ("interrupted") after it was in the
+      // background, even after resume(). If the last resume didn't take, start a fresh context
+      // here, inside the tap, where iOS allows it.
+      if (this._needsFreshContext && this.audioCtx) {
+        this._needsFreshContext = false;
+        try {
+          this.audioCtx.close();
+        } catch (_) {}
+        this.audioCtx = null;
+        this._iosUnlocked = false;
+      }
       const ctx = this._ensureContext();
       if (!ctx) return;
       if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
         this._syncIOSAudioSession();
         ctx.resume().catch(() => {});
+        setTimeout(() => {
+          if (this.audioCtx === ctx && ctx.state !== 'running') this._needsFreshContext = true;
+        }, 400);
       }
       if (!this._iosUnlocked) {
         try {
@@ -186,9 +200,36 @@ export class SensoryEngine {
    */
   playCompletionChime() {
     this._triggerHaptic('Haptic: Pomodoro Bell Ring', [18, 35, 45]);
+    this._whenAudioRunning((ctx) => this._scheduleBellRing(ctx, ctx.currentTime + 0.01, ctx.destination));
+  }
+
+  /**
+   * Runs `fn(ctx)` once the audio clock is actually running. iOS pauses web audio while the app
+   * is in the background and may need a moment (or a tap) after it comes back; a sound queued on
+   * a paused clock would otherwise burst out late, on some later tap. So: play now if running,
+   * else try to resume and play only if that works within ~1.5 s; otherwise skip it.
+   */
+  _whenAudioRunning(fn) {
     const ctx = this._ensureContext();
     if (!ctx) return;
-    this._scheduleBellRing(ctx, ctx.currentTime, ctx.destination);
+    if (ctx.state === 'running') {
+      fn(ctx);
+      return;
+    }
+    const deadline = performance.now() + 1500;
+    let done = false;
+    const tryPlay = () => {
+      if (done || this.audioCtx !== ctx) return;
+      if (ctx.state === 'running') {
+        done = true;
+        fn(ctx);
+      } else if (performance.now() < deadline) {
+        ctx.resume().catch(() => {});
+        setTimeout(tryPlay, 100);
+      }
+    };
+    ctx.resume().then(tryPlay, () => {});
+    setTimeout(tryPlay, 100);
   }
 
   /**
@@ -209,8 +250,9 @@ export class SensoryEngine {
       gain: null,
       endsAt: performance.now() + ((rings - 1) * gapSec + 2.4) * 1000,
     };
-    const ctx = this._ensureContext();
-    if (ctx) {
+    this._alarm = alarm;
+    this._whenAudioRunning((ctx) => {
+      if (this._alarm !== alarm) return; // silenced before the audio came up
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(1, ctx.currentTime);
       gain.connect(ctx.destination);
@@ -219,8 +261,7 @@ export class SensoryEngine {
         this._scheduleBellRing(ctx, t0 + k * gapSec, gain);
       }
       alarm.gain = gain;
-    }
-    this._alarm = alarm;
+    });
   }
 
   isAlarmRinging() {

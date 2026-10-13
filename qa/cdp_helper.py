@@ -35,7 +35,17 @@ class CDP:
         self.call('Page.enable')
         self.call('Emulation.setFocusEmulationEnabled', {'enabled': True})
         self.call('Page.navigate', {'url': url})
-        time.sleep(4.0)
+        time.sleep(3.5)
+        for attempt in range(80):
+            try:
+                if self.js("Boolean(window.fableFlowApp && document.readyState === 'complete')"):
+                    break
+                if attempt in (15, 35, 55):
+                    self.call('Page.navigate', {'url': url})
+                    time.sleep(2.0)
+            except Exception:
+                pass
+            time.sleep(0.3)
 
     def _send(self, obj):
         payload = json.dumps(obj).encode()
