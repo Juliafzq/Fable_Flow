@@ -789,11 +789,20 @@ export class HeroTomato3DView {
     if (!top || !M) return null;
     const size = MATCAP_SIZE;
 
-    // For Satin Silver Metallic ('completed'), build a clean, physically-lit Satin Anodized Silver
-    // studio matcap under the exact same upper-left key light as the heirloom tomatoes so both the
-    // rotating 3D upper shell and stationary 3D lower bowl share natural, silky metallic shading.
+    // For Polished Silver Trophy ('completed'), synthesize a high-contrast mirror-polished chrome/silver
+    // studio environment matcap matching the gleaming softbox highlights, dark metallic reflection lobes,
+    // and bright Fresnel rim reflections of a real polished silver trophy across BOTH halves.
     if (key === 'completed') {
       const rgba = new Uint8Array(size * size * 4);
+      const gauss2 = (x, y, cx, cy, sx, sy, rot = 0) => {
+        const c = Math.cos(rot);
+        const s = Math.sin(rot);
+        const dx = x - cx;
+        const dy = y - cy;
+        const u = (dx * c + dy * s) / sx;
+        const v = (-dx * s + dy * c) / sy;
+        return Math.exp(-0.5 * (u * u + v * v));
+      };
       for (let v = 0; v < size; v++) {
         for (let u = 0; u < size; u++) {
           let nx = (u / (size - 1)) * 2 - 1;
@@ -804,24 +813,76 @@ export class HeroTomato3DView {
             ny *= 0.999 / rr;
           }
           const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-          // Studio key light from upper-left-front + soft overhead fill + warm tabletop bounce
-          const keyDot = Math.max(0, -0.38 * nx + 0.54 * ny + 0.75 * nz);
-          const topFill = Math.max(0, -0.12 * nx + 0.78 * ny + 0.61 * nz);
-          const spec = Math.pow(Math.max(0, -0.32 * nx + 0.56 * ny + 0.76 * nz), 3.4);
-          const rimBounce = Math.max(0, 0.25 * nx - 0.55 * ny + 0.45 * nz) * (1 - nz * 0.6);
-          const fresnel = Math.pow(1 - nz, 2.2);
-          let lum =
-            142 +
-            56 * keyDot +
-            20 * topFill +
-            32 * spec +
-            10 * rimBounce -
-            14 * fresnel * Math.max(0, 0.4 + 0.6 * nx - 0.4 * ny);
-          lum = Math.max(118, Math.min(246, lum));
+          const fresnel = Math.pow(1 - nz, 2.1);
+
+          // Base sterling silver body: ~208 on the top crown so the 3D calyx leaves & stem have rich
+          // metallic relief, with bright Fresnel edge sheen around the outer silhouette.
+          const crownCool = 14 * Math.max(0, ny - 0.45);
+          let lum = 198 + 8 * ny - crownCool + 26 * fresnel;
+
+          // 1. Tight, gleaming pure-white (255) studio softbox highlight on the front-right shoulder
+          //    + subtle specular ridge glint at the very top (ny ~ 0.94) for leaf crests & stem tip
+          const mainSoftbox =
+            68 * gauss2(nx, ny, 0.30, 0.38, 0.22, 0.15, -0.26) +
+            32 * gauss2(nx, ny, 0.44, 0.16, 0.18, 0.18, -0.15) +
+            22 * gauss2(nx, ny, -0.46, 0.58, 0.22, 0.12, 0.38);
+
+          // 2. Crisp pinpoint mirror-silver hotspot (gleams to 255 on the right shoulder & leaf ridges)
+          const hotSpot =
+            34 * gauss2(nx, ny, 0.28, 0.40, 0.11, 0.085, -0.24) +
+            28 * gauss2(nx, ny, 0.14, 0.94, 0.18, 0.055, 0.0);
+
+          // 3. Sculpted sterling-silver dark reflection lobes (~134..150, matching hero-tomato-silver.png's
+          //    upper half without looking black or smudged)
+          const darkCenterLobe = 58 * gauss2(nx, ny, -0.10, 0.17, 0.30, 0.13, 0.08);
+          const darkLeftShoulder = 52 * gauss2(nx, ny, -0.50, 0.36, 0.17, 0.22, -0.48);
+          const darkTopWell = 22 * gauss2(nx, ny, -0.06, 0.66, 0.28, 0.14, 0.0);
+          const darkRightFlank = 34 * gauss2(nx, ny, 0.72, 0.28, 0.13, 0.22, 0.34);
+
+          // 4. Crisp metallic horizon glint just above the equatorial split (ny ~ 0.035)
+          const seamUpperGlint = 20 * gauss2(nx, ny, 0.18, 0.035, 0.42, 0.04, 0.0);
+
+          // 5. Lower-bowl polished silver trophy reflections:
+          //    - Smooth sterling-silver horizon reflection below the bright lower lip
+          //    - Gleaming studio tabletop specular reflection across the lower-front/right bowl
+          //    - Smooth metallic underside (~140..156) with a crisp silver Fresnel bottom rim catchlight
+          const darkLowerHorizon = 46 * gauss2(nx, ny, -0.12, -0.16, 0.38, 0.10, 0.06);
+          const brightTableBounce =
+            56 * gauss2(nx, ny, 0.18, -0.38, 0.34, 0.16, -0.20) +
+            34 * gauss2(nx, ny, -0.20, -0.46, 0.32, 0.15, 0.16);
+          const darkUnderBelly = 52 * gauss2(nx, ny, -0.04, -0.82, 0.52, 0.14, 0.04);
+
+          // 6. Gleaming silver Fresnel edge reflection around the left/right/bottom silhouette rim
+          const sideRimGleam =
+            36 * Math.pow(Math.max(0, Math.abs(nx) - 0.58) / 0.42, 1.55) * (1 - 0.28 * Math.max(0, -ny));
+          const bottomRimCatch = 28 * gauss2(nx, ny, 0.06, -0.95, 0.46, 0.055, 0.0);
+
+          lum +=
+            mainSoftbox +
+            hotSpot +
+            seamUpperGlint +
+            brightTableBounce +
+            sideRimGleam +
+            bottomRimCatch -
+            darkCenterLobe -
+            darkLeftShoulder -
+            darkTopWell -
+            darkRightFlank -
+            darkLowerHorizon -
+            darkUnderBelly;
+
+          // Polished sterling-silver tone curve: dark chrome reflections around 126..146,
+          // silky silver midtones around 195..218, and gleaming 255 specular softbox highlights.
+          const norm = Math.max(0, Math.min(1, (lum - 118) / (264 - 118)));
+          const sCurve = norm * norm * (3 - 2 * norm);
+          const finalLum = 122 + 133 * (0.42 * norm + 0.58 * sCurve);
+
           const k4 = (v * size + u) * 4;
-          rgba[k4] = Math.round(Math.min(255, lum * 0.994));
-          rgba[k4 + 1] = Math.round(Math.min(255, lum * 1.0));
-          rgba[k4 + 2] = Math.round(Math.min(255, lum * 1.008));
+          // Cool-neutral sterling silver tint (tiny cool blue-silver shift in midtones, pure white at 255)
+          const hi = Math.pow(Math.max(0, (finalLum - 180) / 75), 1.5);
+          rgba[k4] = Math.round(Math.max(0, Math.min(255, finalLum * (0.990 + 0.010 * hi))));
+          rgba[k4 + 1] = Math.round(Math.max(0, Math.min(255, finalLum * (0.996 + 0.004 * hi))));
+          rgba[k4 + 2] = Math.round(Math.max(0, Math.min(255, finalLum * 1.006)));
           rgba[k4 + 3] = 255;
         }
       }
@@ -1229,11 +1290,13 @@ export class HeroTomato3DView {
           sampleMC(nx + gx, ny + gy, rgb);
 
           // Split slot occlusion + lower-lip studio rim highlight + gentle tabletop contact AO
-          const slotDepth = (isSilver ? 0.64 : 0.68) * (1.0 - 0.18 * Math.pow(Math.abs(u), 3));
+          const slotDepth = (isSilver ? 0.68 : 0.68) * (1.0 - 0.18 * Math.pow(Math.abs(u), 3));
           const slotAO = 1.0 - slotDepth * gSlot;
-          const keySide = Math.max(0.18, 0.78 - 0.46 * nx);
-          const lipRim = 1.0 + (isSilver ? 0.13 : 0.10) * lipUp * keySide * (1.0 - gSlot);
-          const groundAO = 1.0 - (isSilver ? 0.14 : 0.18) * Math.pow(Math.max(0.0, (t - 0.68) / 0.32), 1.55);
+          const keySide = isSilver
+            ? Math.max(0.35, 0.88 + 0.26 * Math.cos((u - 0.18) * 2.2))
+            : Math.max(0.18, 0.78 - 0.46 * nx);
+          const lipRim = 1.0 + (isSilver ? 0.22 : 0.10) * lipUp * keySide * (1.0 - gSlot);
+          const groundAO = 1.0 - (isSilver ? 0.08 : 0.18) * Math.pow(Math.max(0.0, (t - 0.68) / 0.32), 1.55);
           const texFactor =
             (1.0 + grainAmt * fine0 * 2.0) * (1.0 + mottleAmt * mottle * 2.0) * (1.0 - 0.5 * gSlot) +
             0.5 * gSlot;
@@ -1300,8 +1363,9 @@ export class HeroTomato3DView {
     if ((heroVisible || this._top3D || Math.abs(thetaDeg) > 0.01) && this._topReady(key)) {
       const top = this._top3D;
       const texOpts = {
-        grain: key === 'completed' ? 0.004 : 0.056,
-        mottle: key === 'completed' ? 0.006 : 0.034,
+        shadow: key === 'completed' ? 0.24 : 0.48,
+        grain: key === 'completed' ? 0.0015 : 0.056,
+        mottle: key === 'completed' ? 0.002 : 0.034,
       };
       if (top.render(thetaDeg, key, texOpts)) {
         ctx.drawImage(this._cleanPlates.get(key), 0, 0, this.baseW, this.baseH);
