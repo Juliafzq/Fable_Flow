@@ -10,7 +10,7 @@
  *   at the physical silhouette horizon instead of fading out unnaturally.
  */
 
-import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261013_v59';
+import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261013_v65';
 
 export const HEIRLOOM_PALETTE = {
   0: {
@@ -611,18 +611,23 @@ export class HeroTomato3DView {
       const fpx = fullData.data;
 
       const rawTom = new Uint8Array(bw * bh);
-      for (let y = 52; y < 442; y++) {
-        const t = Math.max(0.0, Math.min(1.0, (y - TOP.ys0) / (435.8 - TOP.ys0)));
+      const yPoleRef = 436.6;
+      for (let y = 52; y < 444; y++) {
+        const t = Math.max(0.0, Math.min(1.0, (y - TOP.ys0) / (yPoleRef - TOP.ys0)));
         const rEst =
           y <= TOP.ys0
             ? TOP.a
-            : TOP.a * Math.pow(Math.max(0.0, 1.0 - Math.pow(t, 1.84 + 0.36 * t * t)), 0.452) +
+            : TOP.a *
+                Math.pow(
+                  Math.max(0.0, 1.0 - Math.pow(t, 1.84 + 0.36 * t * t)),
+                  0.452 - 0.038 * t * t
+                ) +
               2.6 * t * t * (1.0 - t);
         for (let x = 106; x < 558; x++) {
           const i4 = (y * bw + x) * 4;
           const rgDiff = fpx[i4] - fpx[i4 + 1];
-          const inCore = y >= 92 && y <= 434 && Math.abs(x - TOP.cx) <= rEst - 1.2;
-          if (rgDiff >= 11 || inCore) {
+          const inCore = y >= 92 && y <= 436 && Math.abs(x - TOP.cx) <= rEst - 0.5;
+          if (rgDiff >= 9 || inCore) {
             rawTom[y * bw + x] = 1;
           }
         }
@@ -636,15 +641,20 @@ export class HeroTomato3DView {
         }
       }
 
-      // Dilate by 3 px so every 1x edge pixel and the dark bottom rim (y=432..437) is erased
+      // Dilate by 4 px in the upper half and by a 9 px circular radius in the lower half (y >= 250)
+      // so the entire 8x8 JPEG block-ringing halo outside the bottom & bottom-right edge is erased.
       const eraseTom = new Uint8Array(bw * bh);
-      for (let y = 50; y < 444; y++) {
-        for (let x = 104; x < 560; x++) {
+      for (let y = 48; y < 450; y++) {
+        const rad = y >= 250 ? 9 : 4;
+        const rad2 = rad * rad;
+        for (let x = 96; x < 568; x++) {
           let hit = false;
-          for (let dy = -3; dy <= 3 && !hit; dy++) {
+          for (let dy = -rad; dy <= rad && !hit; dy++) {
             const yy = y + dy;
             if (yy < 0 || yy >= bh) continue;
-            for (let dx = -3; dx <= 3 && !hit; dx++) {
+            const dy2 = dy * dy;
+            for (let dx = -rad; dx <= rad && !hit; dx++) {
+              if (dy2 + dx * dx > rad2) continue;
               const xx = x + dx;
               if (xx >= 0 && xx < bw && rawTom[yy * bw + xx]) hit = true;
             }
@@ -654,9 +664,9 @@ export class HeroTomato3DView {
       }
 
       const yBotErase = new Int16Array(bw);
-      for (let x = 104; x < 560; x++) {
+      for (let x = 96; x < 568; x++) {
         let yb = -1;
-        for (let y = 443; y >= 50; y--) {
+        for (let y = 449; y >= 48; y--) {
           if (eraseTom[y * bw + x]) {
             yb = y;
             break;
@@ -666,34 +676,124 @@ export class HeroTomato3DView {
       }
 
       const origPx = new Uint8ClampedArray(fpx);
-      for (let y = 50; y < 444; y++) {
-        let x = 104;
-        while (x < 560) {
+      // Precompute clean, horizontally smoothed floor shadow colors below yBotErase[x]
+      // (sampled 2..6 px outside eraseTom, completely past the 8x8 DCT halo)
+      const botR = new Float32Array(bw);
+      const botG = new Float32Array(bw);
+      const botB = new Float32Array(bw);
+      const yBotSmooth = new Float32Array(bw);
+      for (let x = 96; x < 568; x++) {
+        let syb = 0;
+        let sc = 0;
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        let cCnt = 0;
+        for (let dx = -5; dx <= 5; dx++) {
+          const xx = Math.max(96, Math.min(567, x + dx));
+          const yb = yBotErase[xx];
+          if (yb > 0) {
+            syb += yb;
+            sc++;
+            for (let dy = 2; dy <= 6; dy++) {
+              const yy = Math.min(bh - 1, yb + dy);
+              if (!eraseTom[yy * bw + xx]) {
+                const ii = (yy * bw + xx) * 4;
+                sr += origPx[ii];
+                sg += origPx[ii + 1];
+                sb += origPx[ii + 2];
+                cCnt++;
+              }
+            }
+          }
+        }
+        yBotSmooth[x] = sc > 0 ? syb / sc : -1;
+        if (cCnt > 0) {
+          botR[x] = sr / cCnt;
+          botG[x] = sg / cCnt;
+          botB[x] = sb / cCnt;
+        }
+      }
+      // Smooth botR/G/B horizontally so adjacent columns never form vertical streaks
+      const botRs = new Float32Array(bw);
+      const botGs = new Float32Array(bw);
+      const botBs = new Float32Array(bw);
+      for (let x = 96; x < 568; x++) {
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        let cnt = 0;
+        for (let dx = -6; dx <= 6; dx++) {
+          const xx = x + dx;
+          if (xx >= 96 && xx < 568 && yBotSmooth[xx] > 0) {
+            sr += botR[xx];
+            sg += botG[xx];
+            sb += botB[xx];
+            cnt++;
+          }
+        }
+        if (cnt > 0) {
+          botRs[x] = sr / cnt;
+          botGs[x] = sg / cnt;
+          botBs[x] = sb / cnt;
+        }
+      }
+
+      const sampleOuterPatch = (cx0, cy0) => {
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        let cnt = 0;
+        for (let dy = -2; dy <= 2; dy++) {
+          const yy = Math.max(0, Math.min(bh - 1, cy0 + dy));
+          for (let dx = -2; dx <= 2; dx++) {
+            const xx = Math.max(0, Math.min(bw - 1, cx0 + dx));
+            if (!eraseTom[yy * bw + xx]) {
+              const ii = (yy * bw + xx) * 4;
+              sr += origPx[ii];
+              sg += origPx[ii + 1];
+              sb += origPx[ii + 2];
+              cnt++;
+            }
+          }
+        }
+        if (cnt === 0) {
+          const ii = (cy0 * bw + cx0) * 4;
+          return [origPx[ii], origPx[ii + 1], origPx[ii + 2]];
+        }
+        return [sr / cnt, sg / cnt, sb / cnt];
+      };
+
+      for (let y = 48; y < 450; y++) {
+        let x = 96;
+        while (x < 568) {
           if (!eraseTom[y * bw + x]) {
             x++;
             continue;
           }
           const start = x;
-          while (x < 560 && eraseTom[y * bw + x]) x++;
+          while (x < 568 && eraseTom[y * bw + x]) x++;
           const end = x - 1;
-          const lx = Math.max(0, start - 2);
-          const rx = Math.min(bw - 1, end + 2);
-          const li = (y * bw + lx) * 4;
-          const ri = (y * bw + rx) * 4;
+          const lCol = sampleOuterPatch(Math.max(0, start - 4), y);
+          const rCol = sampleOuterPatch(Math.min(bw - 1, end + 4), y);
           const span = Math.max(1, end - start + 2);
+          // In the lower shadow zone (y >= 305), reach 100% right-side shadow color by cx + 10
+          // so bright left-side studio background never bleeds into the bottom or bottom-right shadow.
+          const shadowBlend = smoothstep01((y - 295) / 40);
+          const rightPivot = start + span * (1.0 - 0.46 * shadowBlend);
+          const effSpan = Math.max(1, rightPivot - start);
+
           for (let xx = start; xx <= end; xx++) {
-            const tH = (xx - start + 1) / span;
-            let r = origPx[li] * (1 - tH) + origPx[ri] * tH;
-            let g = origPx[li + 1] * (1 - tH) + origPx[ri + 1] * tH;
-            let b = origPx[li + 2] * (1 - tH) + origPx[ri + 2] * tH;
-            const yb = yBotErase[xx];
-            if (y >= 335 && yb > 0) {
-              const byOut = Math.min(bh - 1, yb + 2);
-              const bi = (byOut * bw + xx) * 4;
-              const wBot = smoothstep01((y - (yb - 26)) / 26);
-              r = r * (1 - wBot) + origPx[bi] * wBot;
-              g = g * (1 - wBot) + origPx[bi + 1] * wBot;
-              b = b * (1 - wBot) + origPx[bi + 2] * wBot;
+            const tH = smoothstep01(Math.min(1.0, (xx - start + 1) / effSpan));
+            let r = lCol[0] * (1 - tH) + rCol[0] * tH;
+            let g = lCol[1] * (1 - tH) + rCol[1] * tH;
+            let b = lCol[2] * (1 - tH) + rCol[2] * tH;
+            const yb = yBotSmooth[xx];
+            if (y >= 305 && yb > 0 && botRs[xx] > 0) {
+              const wBot = smoothstep01((y - (yb - 44)) / 44);
+              r = r * (1 - wBot) + botRs[xx] * wBot;
+              g = g * (1 - wBot) + botGs[xx] * wBot;
+              b = b * (1 - wBot) + botBs[xx] * wBot;
             }
             const o = (y * bw + xx) * 4;
             fpx[o] = Math.round(r);
@@ -703,31 +803,53 @@ export class HeroTomato3DView {
         }
       }
 
-      // Gentle 5x5 box smooth across the erased lower rim so the floor shadow transition is silky
-      const smoothed = new Uint8ClampedArray(fpx);
-      for (let y = 335; y < 444; y++) {
-        for (let x = 108; x < 556; x++) {
-          if (!eraseTom[y * bw + x]) continue;
-          let sr = 0;
-          let sg = 0;
-          let sb = 0;
-          let cnt = 0;
-          for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-              const ii = ((y + dy) * bw + (x + dx)) * 4;
-              sr += fpx[ii];
-              sg += fpx[ii + 1];
-              sb += fpx[ii + 2];
-              cnt++;
+      // Dilate the smoothing mask 5 px beyond eraseTom and run two passes of 7x7 smoothing
+      // so the transition from inpainted shadow to outer studio floor is completely seamless.
+      const smoothMask = new Uint8Array(bw * bh);
+      for (let y = 260; y < 455; y++) {
+        for (let x = 92; x < 572; x++) {
+          let hit = false;
+          for (let dy = -5; dy <= 5 && !hit; dy++) {
+            const yy = y + dy;
+            if (yy < 0 || yy >= bh) continue;
+            for (let dx = -5; dx <= 5 && !hit; dx++) {
+              const xx = x + dx;
+              if (xx >= 0 && xx < bw && eraseTom[yy * bw + xx]) hit = true;
             }
           }
-          const o = (y * bw + x) * 4;
-          smoothed[o] = Math.round(sr / cnt);
-          smoothed[o + 1] = Math.round(sg / cnt);
-          smoothed[o + 2] = Math.round(sb / cnt);
+          if (hit) smoothMask[y * bw + x] = 1;
         }
       }
-      fullData.data.set(smoothed);
+
+      let srcBuf = new Uint8ClampedArray(fpx);
+      let dstBuf = new Uint8ClampedArray(fpx);
+      for (let pass = 0; pass < 2; pass++) {
+        for (let y = 265; y < 455; y++) {
+          for (let x = 94; x < 570; x++) {
+            if (!smoothMask[y * bw + x]) continue;
+            let sr = 0;
+            let sg = 0;
+            let sb = 0;
+            let cnt = 0;
+            for (let dy = -3; dy <= 3; dy++) {
+              const yy = y + dy;
+              for (let dx = -3; dx <= 3; dx++) {
+                const ii = (yy * bw + (x + dx)) * 4;
+                sr += srcBuf[ii];
+                sg += srcBuf[ii + 1];
+                sb += srcBuf[ii + 2];
+                cnt++;
+              }
+            }
+            const o = (y * bw + x) * 4;
+            dstBuf[o] = Math.round(sr / cnt);
+            dstBuf[o + 1] = Math.round(sg / cnt);
+            dstBuf[o + 2] = Math.round(sb / cnt);
+          }
+        }
+        srcBuf.set(dstBuf);
+      }
+      fullData.data.set(dstBuf);
       cctx.putImageData(fullData, 0, 0);
 
       const b2ctx = backdrop2x.getContext('2d', { willReadFrequently: true });
@@ -1195,7 +1317,7 @@ export class HeroTomato3DView {
     };
 
     const ys0 = TOP.ys0;
-    const yPole = 435.8;
+    const yPole = 436.6;
     const a = TOP.a;
     const cx = TOP.cx;
     const rBowlAt = (sy) => {
@@ -1203,7 +1325,11 @@ export class HeroTomato3DView {
       if (sy >= yPole) return 0;
       const t = (sy - ys0) / (yPole - ys0);
       return (
-        a * Math.pow(Math.max(0.0, 1.0 - Math.pow(t, 1.84 + 0.36 * t * t)), 0.452) +
+        a *
+          Math.pow(
+            Math.max(0.0, 1.0 - Math.pow(t, 1.84 + 0.36 * t * t)),
+            0.452 - 0.038 * t * t
+          ) +
         2.6 * t * t * (1.0 - t)
       );
     };
