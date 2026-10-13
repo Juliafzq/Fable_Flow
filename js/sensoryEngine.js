@@ -216,6 +216,7 @@ export class SensoryEngine {
    * One ring, e.g. when you end a timer yourself.
    */
   playCompletionChime() {
+    this.disarmHardwareCountdownAlarm();
     this._triggerHaptic('Haptic: Pomodoro Bell Ring', [18, 35, 45]);
     this._whenAudioRunning((ctx) => this._scheduleBellRing(ctx, ctx.currentTime + 0.01, ctx.destination));
   }
@@ -250,11 +251,146 @@ export class SensoryEngine {
   }
 
   /**
-   * A timer reached 00:00: ring the bell several times (default 3 rings, ~1.8 s apart).
+   * Pre-arms the 3-bell completion alarm directly on the WebAudio hardware clock (`this.audioCtx`)
+   * while a countdown timer is actively running, accompanied by a sub-audible (`1e-5`) keepalive
+   * envelope on the `ambient` audio session ONLY until the timer ends.
+   * - Never interrupts or ducks music (`navigator.audioSession.type = 'ambient'`).
+   * - Uses zero battery when no countdown timer is running (`disarmHardwareCountdownAlarm()`).
+   * - Fires `onAudioDue()` from the high-priority audio thread `onended` event at `00:00 + 20ms`,
+   *   and if the OS completely freezes JS while the user steps away from the app, plays the 3 bell
+   *   strikes (`1.08s` apart) directly on the hardware audio timeline at `00:00 + 180ms`.
+   */
+  armHardwareCountdownAlarm(waitSec, onAudioDue = null, rings = 3, gapSec = 1.08) {
+    this.disarmHardwareCountdownAlarm();
+    if (this.isSilentMode || !(waitSec > 0) || waitSec > 7200) return;
+    const ctx = this._ensureContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const dueAudioTime = now + waitSec + 0.18;
+      const endsAudioTime = dueAudioTime + (rings - 1) * gapSec + 2.45;
+
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(1, now);
+      masterGain.connect(ctx.destination);
+
+      // 1. Sub-audible (1e-5) ambient keepalive envelope ONLY while countdown is active
+      //    so the OS keeps the WebAudio render clock running when stepping away from the app.
+      const keepOsc = ctx.createOscillator();
+      const keepGain = ctx.createGain();
+      keepOsc.type = 'sine';
+      keepOsc.frequency.setValueAtTime(40, now);
+      keepGain.gain.setValueAtTime(0.00001, now);
+      keepOsc.connect(keepGain);
+      keepGain.connect(masterGain);
+      keepOsc.start(now);
+      keepOsc.stop(endsAudioTime);
+
+      // 2. High-priority audio-thread wake trigger at 00:00 + 20ms (wakes JS even if setTimeout is throttled)
+      const dueOsc = ctx.createOscillator();
+      const dueGain = ctx.createGain();
+      dueOsc.type = 'sine';
+      dueOsc.frequency.setValueAtTime(40, now);
+      dueGain.gain.setValueAtTime(0.000001, now);
+      dueOsc.connect(dueGain);
+      dueGain.connect(masterGain);
+      dueOsc.start(now);
+      dueOsc.stop(now + waitSec + 0.02);
+
+      // 3. Hardware-scheduled 3-bell alarm at 00:00 + 180ms (plays automatically if JS is frozen while away)
+      for (let k = 0; k < rings; k++) {
+        this._synthesizeBellRing(ctx, dueAudioTime + k * gapSec, masterGain);
+      }
+
+      const armed = {
+        ctx,
+        masterGain,
+        keepOsc,
+        dueOsc,
+        startedAudioTime: now,
+        waitSec,
+        dueAudioTime,
+        endsAudioTime,
+        gapSec,
+        rings,
+      };
+      this._armedCountdown = armed;
+
+      dueOsc.onended = () => {
+        if (this._armedCountdown === armed && typeof onAudioDue === 'function') {
+          onAudioDue();
+        }
+      };
+    } catch (_) {}
+  }
+
+  /** Cancels any pre-armed hardware countdown alarm immediately (e.g. on pause, stop, or JS alarm handoff). */
+  disarmHardwareCountdownAlarm() {
+    const armed = this._armedCountdown;
+    if (!armed) return;
+    this._armedCountdown = null;
+    try {
+      armed.dueOsc.onended = null;
+    } catch (_) {}
+    try {
+      const now = armed.ctx ? armed.ctx.currentTime : 0;
+      armed.masterGain.gain.cancelScheduledValues(now);
+      armed.masterGain.gain.setValueAtTime(0, now);
+      armed.masterGain.disconnect();
+    } catch (_) {}
+    try {
+      armed.keepOsc.stop();
+    } catch (_) {}
+    try {
+      armed.dueOsc.stop();
+    } catch (_) {}
+  }
+
+  /**
+   * Checks whether the pre-armed hardware alarm already rang (or is currently ringing) at 00:00
+   * while the user was stepped away from the app with JS frozen.
+   */
+  consumeHardwareAlarmStatus() {
+    const armed = this._armedCountdown;
+    if (!armed) return 'did_not_ring';
+    const ctx = this.audioCtx;
+    if (
+      !ctx ||
+      armed.ctx !== ctx ||
+      ctx.state !== 'running' ||
+      this.isSilentMode ||
+      ctx.currentTime < armed.dueAudioTime + 0.08 ||
+      ctx.currentTime - armed.startedAudioTime < armed.waitSec * 0.85
+    ) {
+      this.disarmHardwareCountdownAlarm();
+      return 'did_not_ring';
+    }
+    if (ctx.currentTime < armed.endsAudioTime) {
+      // Currently mid-ring in hardware: transfer masterGain to this._alarm so a tap can silence it
+      this._armedCountdown = null;
+      try {
+        armed.dueOsc.onended = null;
+      } catch (_) {}
+      const remainingMs = Math.max(200, (armed.endsAudioTime - ctx.currentTime) * 1000);
+      this._alarm = {
+        hapticTimers: [],
+        gain: armed.masterGain,
+        endsAt: performance.now() + remainingMs,
+      };
+      return 'already_ringing';
+    }
+    this.disarmHardwareCountdownAlarm();
+    return 'already_rang';
+  }
+
+  /**
+   * A timer reached 00:00: ring the bell several times (default 3 rings, ~1.08 s apart — 40% tighter spacing).
    * Every ring is queued on the audio clock up front, so the later rings still play when a
    * background tab's JS timers are throttled. Any tap stops it (stopCompletionAlarm).
    */
-  playCompletionAlarm(rings = 3, gapSec = 1.8) {
+  playCompletionAlarm(rings = 3, gapSec = 1.08) {
+    this.disarmHardwareCountdownAlarm();
     this.stopCompletionAlarm();
     const hapticTimers = [];
     for (let k = 0; k < rings; k++) {
@@ -308,6 +444,10 @@ export class SensoryEngine {
 
   /** One "k-DING" (escapement grace tap + full bell strike) at audio time `when` into `dest`. */
   _scheduleBellRing(ctx, when, dest) {
+    this._synthesizeBellRing(ctx, when, dest);
+  }
+
+  _synthesizeBellRing(ctx, when, dest) {
     const triggerBellStrike = (strikeTime, velocity) => {
       // 1. Physical metallic hammer-on-brass impact impulse (short filtered burst)
       const clickDur = 0.018;

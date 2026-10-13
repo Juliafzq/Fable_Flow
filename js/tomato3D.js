@@ -593,40 +593,148 @@ export class HeroTomato3DView {
     };
     const dist = chamfer(solid, W, H);
 
-    // Bottom bowl mask (x: 108..556, y: 246..444 in 1x sprite units) read from Deep Crimson (key 0),
-    // where red chroma (R - G >= 24) cleanly separates the tomato body from the cream backdrop and
-    // the neutral grey floor shadow (R - G <= 3), while keeping the seam groove and white pointer out.
-    const botBox = { x0: B.x0, y0: 246, x1: B.x1, y1: 444 };
-    const botH = botBox.y1 - botBox.y0;
-    const botN = W * botH;
-    const botSolid = new Uint8Array(botN);
-    const seamBandSolid = new Uint8Array(botN);
+    // Build a shared 2x Retina studio backdrop + floor shadow plate (with 100% of the 1x tomato
+    // body, 1x edge fringe, and dark bottom rim cleanly erased) so the 2x Retina 3D Lower Bowl
+    // sits directly on the smooth studio backdrop and floor shadow with zero rough borderline.
+    const bw = this.baseW;
+    const bh = this.baseH;
+    const backdrop2x = document.createElement('canvas');
+    backdrop2x.width = bw * 2;
+    backdrop2x.height = bh * 2;
     try {
-      const bcnv = document.createElement('canvas');
-      bcnv.width = W;
-      bcnv.height = botH;
-      const bctx = bcnv.getContext('2d', { willReadFrequently: true });
-      bctx.drawImage(refImg, -botBox.x0, -botBox.y0);
-      const bsrc = bctx.getImageData(0, 0, W, botH).data;
-      for (let by = 0; by < botH; by++) {
-        const sy = botBox.y0 + by;
-        for (let bx = 0; bx < W; bx++) {
-          const sx = botBox.x0 + bx;
-          const i = (by * W + bx) * 4;
-          if (bsrc[i] - bsrc[i + 1] < 24) continue;
-          // Seam blend band just above the groove (where 3D top alpha ramps from 0..1)
-          if (sy >= seamY[bx] - 15.0 && sy <= seamY[bx] - 2.0) {
-            seamBandSolid[by * W + bx] = 1;
+      const c1x = document.createElement('canvas');
+      c1x.width = bw;
+      c1x.height = bh;
+      const cctx = c1x.getContext('2d', { willReadFrequently: true });
+      cctx.drawImage(refImg, 0, 0, bw, bh);
+      const fullData = cctx.getImageData(0, 0, bw, bh);
+      const fpx = fullData.data;
+
+      const rawTom = new Uint8Array(bw * bh);
+      for (let y = 52; y < 442; y++) {
+        const t = Math.max(0.0, Math.min(1.0, (y - TOP.ys0) / (435.8 - TOP.ys0)));
+        const rEst =
+          y <= TOP.ys0
+            ? TOP.a
+            : TOP.a * Math.pow(Math.max(0.0, 1.0 - Math.pow(t, 1.84 + 0.36 * t * t)), 0.452) +
+              2.6 * t * t * (1.0 - t);
+        for (let x = 106; x < 558; x++) {
+          const i4 = (y * bw + x) * 4;
+          const rgDiff = fpx[i4] - fpx[i4 + 1];
+          const inCore = y >= 92 && y <= 434 && Math.abs(x - TOP.cx) <= rEst - 1.2;
+          if (rgDiff >= 11 || inCore) {
+            rawTom[y * bw + x] = 1;
           }
-          if (sy < seamY[bx] + 2.2) continue;
-          // Exclude the white pointer triangle (x: 321..339, y: 317..337) and a 1.5px collar
-          if (sx >= 320 && sx <= 340 && sy >= 316 && sy <= 338) continue;
-          botSolid[by * W + bx] = 1;
         }
       }
+      // Also include the upper-half solid mask (stem + back leaves)
+      for (let by = 0; by < H; by++) {
+        for (let bx = 0; bx < W; bx++) {
+          if (solid[by * W + bx]) {
+            rawTom[(B.y0 + by) * bw + (B.x0 + bx)] = 1;
+          }
+        }
+      }
+
+      // Dilate by 3 px so every 1x edge pixel and the dark bottom rim (y=432..437) is erased
+      const eraseTom = new Uint8Array(bw * bh);
+      for (let y = 50; y < 444; y++) {
+        for (let x = 104; x < 560; x++) {
+          let hit = false;
+          for (let dy = -3; dy <= 3 && !hit; dy++) {
+            const yy = y + dy;
+            if (yy < 0 || yy >= bh) continue;
+            for (let dx = -3; dx <= 3 && !hit; dx++) {
+              const xx = x + dx;
+              if (xx >= 0 && xx < bw && rawTom[yy * bw + xx]) hit = true;
+            }
+          }
+          if (hit) eraseTom[y * bw + x] = 1;
+        }
+      }
+
+      const yBotErase = new Int16Array(bw);
+      for (let x = 104; x < 560; x++) {
+        let yb = -1;
+        for (let y = 443; y >= 50; y--) {
+          if (eraseTom[y * bw + x]) {
+            yb = y;
+            break;
+          }
+        }
+        yBotErase[x] = yb;
+      }
+
+      const origPx = new Uint8ClampedArray(fpx);
+      for (let y = 50; y < 444; y++) {
+        let x = 104;
+        while (x < 560) {
+          if (!eraseTom[y * bw + x]) {
+            x++;
+            continue;
+          }
+          const start = x;
+          while (x < 560 && eraseTom[y * bw + x]) x++;
+          const end = x - 1;
+          const lx = Math.max(0, start - 2);
+          const rx = Math.min(bw - 1, end + 2);
+          const li = (y * bw + lx) * 4;
+          const ri = (y * bw + rx) * 4;
+          const span = Math.max(1, end - start + 2);
+          for (let xx = start; xx <= end; xx++) {
+            const tH = (xx - start + 1) / span;
+            let r = origPx[li] * (1 - tH) + origPx[ri] * tH;
+            let g = origPx[li + 1] * (1 - tH) + origPx[ri + 1] * tH;
+            let b = origPx[li + 2] * (1 - tH) + origPx[ri + 2] * tH;
+            const yb = yBotErase[xx];
+            if (y >= 335 && yb > 0) {
+              const byOut = Math.min(bh - 1, yb + 2);
+              const bi = (byOut * bw + xx) * 4;
+              const wBot = smoothstep01((y - (yb - 26)) / 26);
+              r = r * (1 - wBot) + origPx[bi] * wBot;
+              g = g * (1 - wBot) + origPx[bi + 1] * wBot;
+              b = b * (1 - wBot) + origPx[bi + 2] * wBot;
+            }
+            const o = (y * bw + xx) * 4;
+            fpx[o] = Math.round(r);
+            fpx[o + 1] = Math.round(g);
+            fpx[o + 2] = Math.round(b);
+          }
+        }
+      }
+
+      // Gentle 5x5 box smooth across the erased lower rim so the floor shadow transition is silky
+      const smoothed = new Uint8ClampedArray(fpx);
+      for (let y = 335; y < 444; y++) {
+        for (let x = 108; x < 556; x++) {
+          if (!eraseTom[y * bw + x]) continue;
+          let sr = 0;
+          let sg = 0;
+          let sb = 0;
+          let cnt = 0;
+          for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              const ii = ((y + dy) * bw + (x + dx)) * 4;
+              sr += fpx[ii];
+              sg += fpx[ii + 1];
+              sb += fpx[ii + 2];
+              cnt++;
+            }
+          }
+          const o = (y * bw + x) * 4;
+          smoothed[o] = Math.round(sr / cnt);
+          smoothed[o + 1] = Math.round(sg / cnt);
+          smoothed[o + 2] = Math.round(sb / cnt);
+        }
+      }
+      fullData.data.set(smoothed);
+      cctx.putImageData(fullData, 0, 0);
+
+      const b2ctx = backdrop2x.getContext('2d', { willReadFrequently: true });
+      b2ctx.imageSmoothingEnabled = true;
+      b2ctx.imageSmoothingQuality = 'high';
+      b2ctx.drawImage(c1x, 0, 0, bw * 2, bh * 2);
     } catch (_) {}
-    const botDist = chamfer(botSolid, W, botH);
-    const seamBandDist = chamfer(seamBandSolid, W, botH);
 
     // Fast 256x256 tileable smooth value-noise table so the 2x Retina bottom bowl gets the exact
     // same multi-scale matte heirloom skin texture (pores + subtle organic mottle + micro-bump)
@@ -662,11 +770,7 @@ export class HeroTomato3DView {
       solid,
       dist,
       seamY,
-      botBox,
-      botH,
-      botSolid,
-      botDist,
-      seamBandDist,
+      backdrop2x,
       sampleTile,
     };
     return this._twMasks;
@@ -682,8 +786,50 @@ export class HeroTomato3DView {
   _buildMatcap(key) {
     const top = this._getTop3D();
     const M = this._topMasks();
+    if (!top || !M) return null;
+    const size = MATCAP_SIZE;
+
+    // For Satin Silver Metallic ('completed'), build a clean, physically-lit Satin Anodized Silver
+    // studio matcap under the exact same upper-left key light as the heirloom tomatoes so both the
+    // rotating 3D upper shell and stationary 3D lower bowl share natural, silky metallic shading.
+    if (key === 'completed') {
+      const rgba = new Uint8Array(size * size * 4);
+      for (let v = 0; v < size; v++) {
+        for (let u = 0; u < size; u++) {
+          let nx = (u / (size - 1)) * 2 - 1;
+          let ny = (v / (size - 1)) * 2 - 1;
+          const rr = Math.hypot(nx, ny);
+          if (rr > 0.999) {
+            nx *= 0.999 / rr;
+            ny *= 0.999 / rr;
+          }
+          const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+          // Studio key light from upper-left-front + soft overhead fill + warm tabletop bounce
+          const keyDot = Math.max(0, -0.38 * nx + 0.54 * ny + 0.75 * nz);
+          const topFill = Math.max(0, -0.12 * nx + 0.78 * ny + 0.61 * nz);
+          const spec = Math.pow(Math.max(0, -0.32 * nx + 0.56 * ny + 0.76 * nz), 3.4);
+          const rimBounce = Math.max(0, 0.25 * nx - 0.55 * ny + 0.45 * nz) * (1 - nz * 0.6);
+          const fresnel = Math.pow(1 - nz, 2.2);
+          let lum =
+            142 +
+            56 * keyDot +
+            20 * topFill +
+            32 * spec +
+            10 * rimBounce -
+            14 * fresnel * Math.max(0, 0.4 + 0.6 * nx - 0.4 * ny);
+          lum = Math.max(118, Math.min(246, lum));
+          const k4 = (v * size + u) * 4;
+          rgba[k4] = Math.round(Math.min(255, lum * 0.994));
+          rgba[k4 + 1] = Math.round(Math.min(255, lum * 1.0));
+          rgba[k4 + 2] = Math.round(Math.min(255, lum * 1.008));
+          rgba[k4 + 3] = 255;
+        }
+      }
+      return { rgba, size };
+    }
+
     const src = this._twistReadSprite(key);
-    if (!top || !M || !src) return null;
+    if (!src) return null;
     const Gm = this._twistGeometry();
     const { W, H, N } = M;
     const B = TOP.box;
@@ -714,7 +860,6 @@ export class HeroTomato3DView {
       }
     }
 
-    const size = MATCAP_SIZE;
     const bins = new Array(size * size);
     const toLin = (c) => {
       const v = c / 255;
@@ -934,226 +1079,200 @@ export class HeroTomato3DView {
   }
 
   /**
-   * The sprite at 2x Retina with its top half (incl. leaves and stem) replaced by the backdrop,
-   * and its bottom tomato bowl smoothed of blurry 1x photo blotches and surfaced with the same
-   * 2x Retina matte heirloom skin texture (pores + organic mottle + micro-bump) as the 3D top half.
+   * Builds the 2x Retina Clean Plate (`1400x1200`) for colour `key`:
+   * Starts from the 100% tomato-free studio backdrop + floor shadow plate (`M.backdrop2x`) and
+   * renders the stationary 3D Lower Bowl at full 2x Retina resolution using the exact same axis
+   * (`cx = 330.5`), equatorial radius (`a = 216.0`), studio matcap (`mc.rgba`), and multi-scale
+   * heirloom skin texture as `TomatoTop3D`, complete with:
+   * - A real 3D physical two-piece split at the equator (recessed shadow slot + rounded lower-bowl
+   *   upper lip catching a soft studio rim highlight + 3D silhouette bevel notch at the left/right edges),
+   * - Silky 2x Retina sub-pixel anti-aliasing along the entire bottom outline (zero rough borderline),
+   * - Crisp 2x Retina sculpted `▲` pointer marker.
    */
-  _buildCleanPlate(key) {
-    const img = this.images.get(key);
+  _buildCleanPlate(key, mc) {
     const M = this._topMasks();
-    if (!img || !M) return null;
+    if (!M || !M.backdrop2x || !mc) return null;
+    const { W, backdrop2x, sampleTile } = M;
     const B = TOP.box;
-    const { W, H, solid, seamY, botBox, botH, botDist, seamBandDist, sampleTile } = M;
-    const c1x = document.createElement('canvas');
-    c1x.width = this.baseW;
-    c1x.height = this.baseH;
-    const cctx = c1x.getContext('2d', { willReadFrequently: true });
-    cctx.drawImage(img, 0, 0, this.baseW, this.baseH);
-    let data;
-    try {
-      data = cctx.getImageData(B.x0, B.y0, W, H);
-    } catch (_) {
-      return null;
-    }
-    const px = data.data;
-    // erase mask: tomato above the seam blend zone, grown by 2 px to drop the outline's soft edge
-    const erase = new Uint8Array(W * H);
-    for (let by = 0; by < H; by++) {
-      for (let bx = 0; bx < W; bx++) {
-        if (B.y0 + by >= seamY[bx] - 12) continue;
-        let hit = false;
-        for (let dy = -2; dy <= 2 && !hit; dy++) {
-          for (let dx = -2; dx <= 2 && !hit; dx++) {
-            const x = bx + dx;
-            const y = by + dy;
-            if (x >= 0 && y >= 0 && x < W && y < H && solid[y * W + x]) hit = true;
-          }
-        }
-        if (hit) erase[by * W + bx] = 1;
-      }
-    }
-    for (let by = 0; by < H; by++) {
-      let bx = 0;
-      while (bx < W) {
-        if (!erase[by * W + bx]) {
-          bx++;
-          continue;
-        }
-        const start = bx;
-        while (bx < W && erase[by * W + bx]) bx++;
-        const end = bx - 1;
-        const li = (by * W + Math.max(0, start - 2)) * 4;
-        const ri = (by * W + Math.min(W - 1, end + 2)) * 4;
-        const span = Math.max(1, end - start + 2);
-        for (let x = start; x <= end; x++) {
-          const t = (x - start + 1) / span;
-          const o = (by * W + x) * 4;
-          px[o] = px[li] * (1 - t) + px[ri] * t;
-          px[o + 1] = px[li + 1] * (1 - t) + px[ri + 1] * t;
-          px[o + 2] = px[li + 2] * (1 - t) + px[ri + 2] * t;
-        }
-      }
-    }
-    cctx.putImageData(data, B.x0, B.y0);
 
-    // Smooth out the blurry 1x blotches on the bottom half (leaving seam groove, pointer & rim untouched)
-    let botData;
-    try {
-      botData = cctx.getImageData(botBox.x0, botBox.y0, W, botH);
-    } catch (_) {
-      botData = null;
-    }
-    if (botData && botDist) {
-      const bpx = botData.data;
-      const botN = W * botH;
-      const wArr = new Float32Array(botN);
-      const rW = new Float32Array(botN);
-      const gW = new Float32Array(botN);
-      const bW = new Float32Array(botN);
-      for (let id = 0; id < botN; id++) {
-        const w = smoothstep01((botDist[id] - 1.2) / 2.2);
-        if (w <= 0) continue;
-        const i4 = id * 4;
-        wArr[id] = w;
-        rW[id] = bpx[i4] * w;
-        gW[id] = bpx[i4 + 1] * w;
-        bW[id] = bpx[i4 + 2] * w;
-      }
-      const sigma = 20;
-      const R = 40;
-      const kern = new Float32Array(2 * R + 1);
-      for (let i = -R; i <= R; i++) kern[i + R] = Math.exp(-(i * i) / (2 * sigma * sigma));
-      const blur2D = (arr) => {
-        const tmp = new Float32Array(botN);
-        const out = new Float32Array(botN);
-        for (let y = 0; y < botH; y++) {
-          const row = y * W;
-          for (let x = 0; x < W; x++) {
-            let acc = 0;
-            const i0 = Math.max(-R, -x);
-            const i1 = Math.min(R, W - 1 - x);
-            for (let i = i0; i <= i1; i++) acc += arr[row + x + i] * kern[i + R];
-            tmp[row + x] = acc;
-          }
-        }
-        for (let y = 0; y < botH; y++) {
-          const row = y * W;
-          const j0 = Math.max(-R, -y);
-          const j1 = Math.min(R, botH - 1 - y);
-          for (let x = 0; x < W; x++) {
-            let acc = 0;
-            for (let j = j0; j <= j1; j++) acc += tmp[(y + j) * W + x] * kern[j + R];
-            out[row + x] = acc;
-          }
-        }
-        return out;
-      };
-      const wB = blur2D(wArr);
-      const rB = blur2D(rW);
-      const gB = blur2D(gW);
-      const bB = blur2D(bW);
-      // Blend 96% smooth studio lighting + 4% broad variation so all blurry 1x blotches vanish
-      for (let id = 0; id < botN; id++) {
-        const wb = wB[id];
-        if (wb <= 1e-5) continue;
-        const blend = smoothstep01((botDist[id] - 0.5) / 2.2) * 0.96;
-        if (blend <= 0) continue;
-        const i4 = id * 4;
-        const sr = rB[id] / wb;
-        const sg = gB[id] / wb;
-        const sb = bB[id] / wb;
-        bpx[i4] = Math.round(bpx[i4] * (1 - blend) + sr * blend);
-        bpx[i4 + 1] = Math.round(bpx[i4 + 1] * (1 - blend) + sg * blend);
-        bpx[i4 + 2] = Math.round(bpx[i4 + 2] * (1 - blend) + sb * blend);
-      }
-      cctx.putImageData(botData, botBox.x0, botBox.y0);
-    }
-
-    // Build the final Clean Plate at 2x Retina resolution (1400x1200) and apply the unified
-    // 2x Retina matte heirloom skin texture (matching TomatoTop3D's uGrain & uMottle 1:1).
     const plate2x = document.createElement('canvas');
     plate2x.width = this.baseW * 2;
     plate2x.height = this.baseH * 2;
     const pctx = plate2x.getContext('2d', { willReadFrequently: true });
-    pctx.imageSmoothingEnabled = true;
-    pctx.imageSmoothingQuality = 'high';
-    pctx.drawImage(c1x, 0, 0, plate2x.width, plate2x.height);
+    pctx.drawImage(backdrop2x, 0, 0);
 
-    if (botDist && sampleTile) {
-      const x0_2 = botBox.x0 * 2;
-      const y0_2 = botBox.y0 * 2;
-      const W2 = W * 2;
-      const H2 = botH * 2;
-      try {
-        const b2Data = pctx.getImageData(x0_2, y0_2, W2, H2);
-        const px2 = b2Data.data;
-        const src2 = new Uint8ClampedArray(px2);
-        const grainAmt = key === 'completed' ? 0.004 : 0.056;
-        const mottleAmt = key === 'completed' ? 0.006 : 0.034;
+    const botY0 = 246;
+    const botY1 = 442;
+    const botH = botY1 - botY0;
+    const x0_2 = B.x0 * 2;
+    const y0_2 = botY0 * 2;
+    const W2 = W * 2;
+    const H2 = botH * 2;
 
-        for (let by2 = 0; by2 < H2; by2++) {
-          const by1 = by2 * 0.5;
-          const iy = Math.min(botH - 1, by2 >> 1);
-          const sy = botBox.y0 + by1;
-          const row2 = by2 * W2;
-          for (let bx2 = 0; bx2 < W2; bx2++) {
-            const ix = Math.min(W - 1, bx2 >> 1);
-            const dBot = botDist[iy * W + ix];
-            const dSeam = seamBandDist ? seamBandDist[iy * W + ix] : 0;
-            const d = Math.max(dBot, dSeam);
-            if (d <= 0.4) continue;
-            const wTex = smoothstep01((d - 0.4) / 2.2);
-            if (wTex <= 0) continue;
+    const mRgba = mc.rgba;
+    const mSize = mc.size;
+    const sampleMC = (nx, ny, out) => {
+      const u = Math.max(0, Math.min(1, nx * 0.5 + 0.5)) * (mSize - 1);
+      const v = Math.max(0, Math.min(1, ny * 0.5 + 0.5)) * (mSize - 1);
+      const u0 = u | 0;
+      const v0 = v | 0;
+      const u1 = u0 < mSize - 1 ? u0 + 1 : u0;
+      const v1 = v0 < mSize - 1 ? v0 + 1 : v0;
+      const fu = u - u0;
+      const fv = v - v0;
+      const i00 = (v0 * mSize + u0) * 4;
+      const i10 = (v0 * mSize + u1) * 4;
+      const i01 = (v1 * mSize + u0) * 4;
+      const i11 = (v1 * mSize + u1) * 4;
+      const w00 = (1 - fu) * (1 - fv);
+      const w10 = fu * (1 - fv);
+      const w01 = (1 - fu) * fv;
+      const w11 = fu * fv;
+      out[0] = mRgba[i00] * w00 + mRgba[i10] * w10 + mRgba[i01] * w01 + mRgba[i11] * w11;
+      out[1] = mRgba[i00 + 1] * w00 + mRgba[i10 + 1] * w10 + mRgba[i01 + 1] * w01 + mRgba[i11 + 1] * w11;
+      out[2] = mRgba[i00 + 2] * w00 + mRgba[i10 + 2] * w10 + mRgba[i01 + 2] * w01 + mRgba[i11 + 2] * w11;
+    };
 
-            const bx1 = bx2 * 0.5;
-            const sx = botBox.x0 + bx1;
-            const X = sx - TOP.cx;
-            const Y = sy - seamY[ix];
-            // 3D lower-bowl surface coordinates so skin texture foreshortens naturally at the rim
-            const Z = Math.sqrt(Math.max(25.0, TOP.a * TOP.a - X * X - Y * Y * 1.35));
-            const u3 = X + Z * 0.42;
-            const v3 = Y * 1.08 + Z * 0.36;
+    const ys0 = TOP.ys0;
+    const yPole = 435.8;
+    const a = TOP.a;
+    const cx = TOP.cx;
+    const rBowlAt = (sy) => {
+      if (sy <= ys0) return a;
+      if (sy >= yPole) return 0;
+      const t = (sy - ys0) / (yPole - ys0);
+      return (
+        a * Math.pow(Math.max(0.0, 1.0 - Math.pow(t, 1.84 + 0.36 * t * t)), 0.452) +
+        2.6 * t * t * (1.0 - t)
+      );
+    };
 
-            // Fine skin pore noise (exact same frequencies 1.25 and 2.8 as TomatoTop3D)
-            const fine0 =
-              sampleTile(u3 * 1.25, v3 * 1.25) * 0.62 +
-              sampleTile(u3 * 2.8 + 37.2, v3 * 2.8 + 19.4) * 0.38 -
-              0.5;
-            const fineX =
-              sampleTile((u3 + 0.6) * 1.25, v3 * 1.25) * 0.62 +
-              sampleTile((u3 + 0.6) * 2.8 + 37.2, v3 * 2.8 + 19.4) * 0.38 -
-              0.5;
-            const fineY =
-              sampleTile(u3 * 1.25, (v3 + 0.6) * 1.25) * 0.62 +
-              sampleTile(u3 * 2.8 + 37.2, (v3 + 0.6) * 2.8 + 19.4) * 0.38 -
-              0.5;
+    try {
+      const b2Data = pctx.getImageData(x0_2, y0_2, W2, H2);
+      const px2 = b2Data.data;
+      const isSilver = key === 'completed';
+      const grainAmt = isSilver ? 0.004 : 0.056;
+      const mottleAmt = isSilver ? 0.006 : 0.034;
+      const rgb = [0, 0, 0];
 
-            // Medium organic skin mottle (exact same frequencies 0.055 and 0.14 as TomatoTop3D)
-            const mottle =
-              sampleTile(u3 * 0.055 + 11.3, v3 * 0.055 + 53.1) * 0.58 +
-              sampleTile(u3 * 0.14 + 83.7, v3 * 0.14 + 29.8) * 0.42 -
-              0.5;
+      for (let by2 = 0; by2 < H2; by2++) {
+        const sy = botY0 + by2 * 0.5;
+        if (sy >= yPole + 1.0) continue;
+        const rBowl = rBowlAt(sy);
+        if (rBowl <= 0.5) continue;
+        const drDsy = (rBowlAt(sy + 0.5) - rBowlAt(sy - 0.5));
+        const t = Math.max(0.0, Math.min(1.0, (sy - ys0) / (yPole - ys0)));
+        const row2 = by2 * W2;
 
-            // Micro-normal bump shifts lookup slightly across the studio light gradient
-            const gx = (fineX - fine0) * (grainAmt * 28.0) * wTex;
-            const gy = (fineY - fine0) * (grainAmt * 28.0) * wTex;
-            const sx2 = Math.max(0, Math.min(W2 - 1, Math.round(bx2 + gx)));
-            const sy2 = Math.max(0, Math.min(H2 - 1, Math.round(by2 + gy)));
-            const sIdx = (sy2 * W2 + sx2) * 4;
+        for (let bx2 = 0; bx2 < W2; bx2++) {
+          const sx = B.x0 + bx2 * 0.5;
+          const dx = sx - cx;
+          const ax = Math.abs(dx);
+          if (ax > rBowl + 1.5) continue;
 
-            // Exact same * 2.0 contrast modulation as TomatoTop3D's fragment shader
-            const factor =
-              (1.0 + grainAmt * fine0 * 2.0 * wTex) *
-              (1.0 + mottleAmt * mottle * 2.0 * wTex);
-            const oIdx = (row2 + bx2) * 4;
-            px2[oIdx] = Math.max(0, Math.min(255, Math.round(src2[sIdx] * factor)));
-            px2[oIdx + 1] = Math.max(0, Math.min(255, Math.round(src2[sIdx + 1] * factor)));
-            px2[oIdx + 2] = Math.max(0, Math.min(255, Math.round(src2[sIdx + 2] * factor)));
+          const seamS = twistSeamScreenY(sx);
+          const dBelow = sy - seamS;
+          if (dBelow < -1.2) continue;
+
+          // Real 3D physical two-piece split: at dBelow ≈ 0, the outer silhouette indents slightly
+          // where the rounded upper and lower lips meet at the recessed split slot.
+          const splitNotch = 1.15 * Math.exp(-(dBelow * dBelow) / 1.45);
+          const rEff = rBowl - splitNotch;
+          const slopeScale = Math.hypot(1.0, drDsy * (ax / Math.max(18.0, rBowl)));
+          const perpDist = (rEff - ax) / slopeScale;
+          if (perpDist <= -0.75) continue;
+
+          const alphaOut = smoothstep01((perpDist + 0.65) / 1.30);
+          if (alphaOut <= 0.001) continue;
+
+          const u = Math.max(-1.0, Math.min(1.0, dx / a));
+          // 3D outward surface normal (nx, ny) on the lower bowl
+          let nx = (dx / a) * (1.0 - 0.36 * t) + (dx / Math.max(52.0, rBowl)) * (0.36 * t);
+          nx = Math.max(-0.98, Math.min(0.98, nx));
+          let ny = 0.12 - 0.94 * Math.pow(t, 0.92);
+
+          // 1) Recessed mechanical split slot right at the seam (dBelow ≈ 0..0.9 px)
+          const gSlot = Math.exp(-Math.pow((dBelow - 0.32) / 0.88, 2));
+          // 2) Rounded upper lip of the lower bowl (dBelow ∈ [0.55, 5.2] px):
+          //    rolls outward from the split slot so its normal tilts upward toward the studio light
+          let lipUp = 0.0;
+          if (dBelow > 0.45 && dBelow < 5.4) {
+            const uLip = Math.max(0.0, Math.min(1.0, (dBelow - 0.45) / 4.6));
+            lipUp = Math.sin(Math.PI * Math.pow(uLip, 0.72)) * (1.0 - 0.34 * u * u);
+            ny += 0.48 * lipUp * (1.0 - gSlot);
           }
+
+          // 3D lower-bowl surface coordinates for unified 2x Retina skin grain + mottle + micro-bump
+          const Z = Math.sqrt(Math.max(25.0, a * a - dx * dx - dBelow * dBelow * 1.35));
+          const u3 = dx + Z * 0.42;
+          const v3 = dBelow * 1.08 + Z * 0.36;
+
+          const fine0 =
+            sampleTile(u3 * 1.25, v3 * 1.25) * 0.62 +
+            sampleTile(u3 * 2.8 + 37.2, v3 * 2.8 + 19.4) * 0.38 -
+            0.5;
+          const fineX =
+            sampleTile((u3 + 0.6) * 1.25, v3 * 1.25) * 0.62 +
+            sampleTile((u3 + 0.6) * 2.8 + 37.2, v3 * 2.8 + 19.4) * 0.38 -
+            0.5;
+          const fineY =
+            sampleTile(u3 * 1.25, (v3 + 0.6) * 1.25) * 0.62 +
+            sampleTile(u3 * 2.8 + 37.2, (v3 + 0.6) * 2.8 + 19.4) * 0.38 -
+            0.5;
+          const mottle =
+            sampleTile(u3 * 0.055 + 11.3, v3 * 0.055 + 53.1) * 0.58 +
+            sampleTile(u3 * 0.14 + 83.7, v3 * 0.14 + 29.8) * 0.42 -
+            0.5;
+
+          const gx = (fineX - fine0) * (grainAmt * 0.48);
+          const gy = (fineY - fine0) * (grainAmt * 0.48);
+          sampleMC(nx + gx, ny + gy, rgb);
+
+          // Split slot occlusion + lower-lip studio rim highlight + gentle tabletop contact AO
+          const slotDepth = (isSilver ? 0.64 : 0.68) * (1.0 - 0.18 * Math.pow(Math.abs(u), 3));
+          const slotAO = 1.0 - slotDepth * gSlot;
+          const keySide = Math.max(0.18, 0.78 - 0.46 * nx);
+          const lipRim = 1.0 + (isSilver ? 0.13 : 0.10) * lipUp * keySide * (1.0 - gSlot);
+          const groundAO = 1.0 - (isSilver ? 0.14 : 0.18) * Math.pow(Math.max(0.0, (t - 0.68) / 0.32), 1.55);
+          const texFactor =
+            (1.0 + grainAmt * fine0 * 2.0) * (1.0 + mottleAmt * mottle * 2.0) * (1.0 - 0.5 * gSlot) +
+            0.5 * gSlot;
+
+          const totalShade = slotAO * lipRim * groundAO * texFactor;
+          let rCol = Math.max(0, Math.min(255, rgb[0] * totalShade));
+          let gCol = Math.max(0, Math.min(255, rgb[1] * totalShade));
+          let bCol = Math.max(0, Math.min(255, rgb[2] * totalShade));
+
+          // Crisp 2x Retina sculpted `▲` pointer marker at cx = 330.5, sy ∈ [318.2, 336.4]
+          if (sy >= 317.2 && sy <= 337.4 && ax <= 10.5) {
+            const py0 = 318.4;
+            const py1 = 336.2;
+            const halfBase = 8.2;
+            const tTri = (sy - py0) / (py1 - py0);
+            const maxX = tTri * halfBase;
+            const dSides = (maxX - ax) * 0.894;
+            const dBot = py1 - sy;
+            const dTop = sy - py0;
+            const dTri = Math.min(dSides, dBot, dTop + 0.8);
+            if (dTri > -0.65) {
+              const aTri = smoothstep01((dTri + 0.55) / 1.10);
+              const ptrR = isSilver ? 82 : 228;
+              const ptrG = isSilver ? 84 : 206;
+              const ptrB = isSilver ? 88 : 202;
+              rCol = rCol * (1 - aTri) + ptrR * aTri;
+              gCol = gCol * (1 - aTri) + ptrG * aTri;
+              bCol = bCol * (1 - aTri) + ptrB * aTri;
+            }
+          }
+
+          const oIdx = (row2 + bx2) * 4;
+          px2[oIdx] = Math.round(px2[oIdx] * (1 - alphaOut) + rCol * alphaOut);
+          px2[oIdx + 1] = Math.round(px2[oIdx + 1] * (1 - alphaOut) + gCol * alphaOut);
+          px2[oIdx + 2] = Math.round(px2[oIdx + 2] * (1 - alphaOut) + bCol * alphaOut);
         }
-        pctx.putImageData(b2Data, x0_2, y0_2);
-      } catch (_) {}
-    }
+      }
+      pctx.putImageData(b2Data, x0_2, y0_2);
+    } catch (_) {}
 
     return plate2x;
   }
@@ -1166,8 +1285,9 @@ export class HeroTomato3DView {
     if (top.hasMatcap(key) && this._cleanPlates.get(key)) return true;
     if (!this.images.get(key)) return false;
     const mc = this._buildMatcap(key);
-    const plate = this._buildCleanPlate(key);
-    if (!mc || !plate) return false;
+    if (!mc) return false;
+    const plate = this._buildCleanPlate(key, mc);
+    if (!plate) return false;
     top.setMatcap(key, mc.rgba, mc.size);
     this._cleanPlates.set(key, plate);
     return true;

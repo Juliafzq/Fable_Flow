@@ -85,7 +85,7 @@ gaps = [round(b - a, 2) for a, b in zip(whens, whens[1:])]
 queued_up_front = (max(s['at'] for s in lb['strikes']) - min(s['at'] for s in lb['strikes'])) < 0.15 if lb['strikes'] else False
 print('B rings', [r['kind'] for r in lb['rings']], 'strike times', [round(w, 2) for w in whens], 'gaps', gaps)
 res['B foreground: bell rings 3 times'] = bell_count(lb) >= 3
-res['B rings are spaced out (1.2-3 s apart)'] = len(gaps) >= 2 and all(1.2 <= g <= 3.0 for g in gaps)
+res['B rings are spaced out (~1.08 s apart, 40% tighter)'] = len(gaps) >= 2 and all(0.9 <= g <= 1.3 for g in gaps)
 res['B all rings queued on the audio clock at once'] = queued_up_front
 ringing_before = c.js("Boolean(window.fableFlowApp.sensory.isAlarmRinging && window.fableFlowApp.sensory.isAlarmRinging())")
 c.shot('chime_ringing_banner')
@@ -200,6 +200,31 @@ canc = [m for m in ni['afterPause'][len(ni['afterStart']):] if m.get('action') =
 print('I native bridge schedule:', len(sched), 'haptic:', len(hap), 'cancel:', len(canc))
 res['I native iOS wrapper bridge schedules & cancels local timer notifications'] = (
     len(sched) == 1 and sched[0].get('title') == 'UNTO / FLOW' and sched[0].get('endsAtMs', 0) > 0 and len(hap) >= 1 and len(canc) >= 1
+)
+
+# --- J: homepage tomato click opens hero tomato page on a new unassigned tomato ----------
+hj = c.js("""(() => {
+  const a = window.fableFlowApp;
+  a.state.timers.forEach((s, idx) => {
+    s.assignedTaskId = idx < 2 ? 'task-' + idx : null;
+    s.customTitle = idx < 2 ? 'Assigned ' + idx : null;
+    s.runState = 'idle';
+    s.remainingSeconds = idx < 2 ? 1500 : 0;
+  });
+  a.state.activePillar = 'home';
+  a.state.timerSubMode = 'grid';
+  a.state.selectedQuadrant = 0;
+  a.renderAll();
+  document.getElementById('home-tomato-btn').click();
+  return {
+    pillar: a.state.activePillar,
+    subMode: a.state.timerSubMode,
+    quad: a.state.selectedQuadrant,
+  };
+})()""")
+print('J home tomato click:', hj)
+res['J homepage tomato opens hero page on new unassigned tomato'] = (
+    hj['pillar'] == 'timer' and hj['subMode'] == 'hero' and hj['quad'] == 2
 )
 
 for k, v in res.items(): print(('OK   ' if v else 'BAD  ') + k)

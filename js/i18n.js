@@ -155,6 +155,8 @@ const ZH = {
   'Link a daily to-do item to a focus timer': '给这条待办开一个番茄钟',
   'Turn Tomato Dial': '转动番茄',
   'Swipe across the tomato to turn the dial': '左右拨动番茄，转动转盘',
+  'Swipe to turn the dial. Turn on phone ringtone & app sound to hear the chime':
+    '左右拨动番茄设定时间。请开启手机响铃与应用内声音以听取到点铃声',
   'Tap Digits to Type Time': '点数字输入时间',
   'Tap the numbers to type minutes, e.g. 45': '点击数字，直接输入分钟，如 45',
   'Tomato Grid · 6 Focus Timers': '番茄格 · 6 个番茄',

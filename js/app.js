@@ -711,7 +711,20 @@ export class FableFlowApp {
     if (this.els.homeTomatoBtn) {
       const openTimerFromHome = () => {
         this.sensory.playMechanicalTick();
+        const freeSlot =
+          this.state.timers.find(
+            (s) =>
+              !s.assignedTaskId &&
+              !s.customTitle &&
+              s.runState === 'idle' &&
+              s.remainingSeconds === 0
+          ) ||
+          this.state.timers.find((s) => !s.assignedTaskId && !s.customTitle);
+        if (freeSlot) {
+          this.state.selectedQuadrant = freeSlot.quadrant;
+        }
         this.state.activePillar = 'timer';
+        this.state.timerSubMode = 'hero';
         this.saveState();
         this.renderAll();
       };
@@ -1095,6 +1108,11 @@ export class FableFlowApp {
   toggleSilentAudioMode() {
     this.sensory.isSilentMode = !this.sensory.isSilentMode;
     this.state.isSilentMode = this.sensory.isSilentMode;
+    if (this.sensory.isSilentMode) {
+      this.sensory.stopCompletionAlarm();
+      this.sensory.disarmHardwareCountdownAlarm();
+    }
+    this.armTimerDueAlarm();
     this.saveState();
     if (this.els.demoBtnSilent) {
       this.els.demoBtnSilent.textContent = this.sensory.isSilentMode
@@ -3420,14 +3438,23 @@ export class FableFlowApp {
     slot.runState = 'completed';
     slot.lastTickTimestamp = null;
 
-    // Reached 00:00 just now (or while you're away on another tab/app): ring the bell several times.
-    // Found finished only when you came back long after (phone was asleep): one soft chime.
-    // Ended it yourself: one chime.
-    const userAway = typeof document !== 'undefined' && document.visibilityState === 'hidden';
-    if (completedNaturally && (userAway || lateMs < 4000)) {
-      this.sensory.playCompletionAlarm();
-    } else {
-      this.sensory.playCompletionChime();
+    // If a pre-armed hardware WebAudio alarm already rang (or is mid-ring) at 00:00 while
+    // the user was stepped away from the app, don't ring a second time upon re-entry.
+    const hwStatus =
+      completedNaturally && this.sensory && this.sensory.consumeHardwareAlarmStatus
+        ? this.sensory.consumeHardwareAlarmStatus()
+        : 'did_not_ring';
+
+    if (hwStatus === 'did_not_ring') {
+      // Reached 00:00 just now (or while you're away on another tab/app): ring the bell several times.
+      // Found finished only when you came back long after (phone was asleep): one soft chime.
+      // Ended it yourself: one chime.
+      const userAway = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      if (completedNaturally && (userAway || lateMs < 4000)) {
+        this.sensory.playCompletionAlarm();
+      } else {
+        this.sensory.playCompletionChime();
+      }
     }
     if (!completedNaturally) {
       this.showTelemetryToast(this.t('Timer ended'));
@@ -3440,8 +3467,9 @@ export class FableFlowApp {
 
   /**
    * One-shot wake-up at the exact moment the soonest running countdown reaches 00:00,
-   * plus native iOS `UNUserNotificationCenter` scheduling when running inside the iPhone app wrapper
-   * so the bell rings on the Lock Screen or in other apps with zero battery drain or audio interruption.
+   * plus hardware WebAudio pre-scheduling (`armHardwareCountdownAlarm`) and native iOS
+   * `UNUserNotificationCenter` scheduling when running inside the iPhone app wrapper
+   * so the bell rings while stepped away with zero battery drain when idle or audio interruption.
    */
   armTimerDueAlarm() {
     if (this._dueTimeout) {
@@ -3489,8 +3517,24 @@ export class FableFlowApp {
         } catch (_) {}
       }
     }
-    if (!Number.isFinite(soonest)) return;
+    if (!Number.isFinite(soonest)) {
+      if (this.sensory && this.sensory.disarmHardwareCountdownAlarm) {
+        this.sensory.disarmHardwareCountdownAlarm();
+      }
+      return;
+    }
     const waitMs = Math.max(0, soonest - Date.now()) + 60;
+    if (this.sensory && this.sensory.armHardwareCountdownAlarm) {
+      const waitSec = Math.max(0.05, (soonest - Date.now()) / 1000);
+      this.sensory.armHardwareCountdownAlarm(waitSec, () => {
+        if (this._dueTimeout) {
+          clearTimeout(this._dueTimeout);
+          this._dueTimeout = null;
+        }
+        this.applyTimerTick(this.syncRunningTimersToClock(Date.now()));
+        this.armTimerDueAlarm();
+      });
+    }
     this._dueTimeout = setTimeout(() => {
       this._dueTimeout = null;
       this.applyTimerTick(this.syncRunningTimersToClock(Date.now()));
@@ -6131,7 +6175,7 @@ export class FableFlowApp {
       // STEP 5: HERO TOMATO PAGE (Immediately after "Tap Mini Tomato"!)
       {
         title: 'Turn Tomato Dial',
-        desc: 'Swipe across the tomato to turn the dial',
+        desc: 'Swipe to turn the dial. Turn on phone ringtone & app sound to hear the chime',
         applyPage: () => {
           this.restoreTourDemoArchiveCards();
           this.state.activePillar = 'timer';

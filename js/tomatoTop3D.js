@@ -24,7 +24,7 @@
  */
 
 export const TOP_GEOMETRY = {
-  cx: 331.5, // stem / turning axis (sprite x)
+  cx: 330.5, // stem / turning axis (sprite x, aligned with sprite & lower bowl)
   ys0: 265.4, // sprite y of the axis at the seam plane (= seam side points)
   sinE: 33.4 / 215.5, // camera tilt
   a: 216.0, // seam radius
@@ -92,6 +92,7 @@ function wrapPi(a) {
 
 /** Smooth dome height at reference radius r0 (superellipse + the well around the stem). */
 function profileY(r0) {
+  if (r0 > G.a) return -(r0 - G.a);
   const t = Math.min(1, Math.max(0, r0 / G.a));
   const y = G.b * Math.pow(Math.max(0, 1 - Math.pow(t, G.p)), 1 / G.p);
   return y - G.wellDepth * Math.exp(-(r0 * r0) / (G.wellRadius * G.wellRadius));
@@ -167,7 +168,8 @@ function leafRelief(r0, phi) {
 /** Dome surface (no leaves) for reference radius r0 and longitude phi: [X, Y, Z]. */
 function basePoint(r0, phi, out) {
   const y = profileY(r0);
-  const r = r0 * (1 + lobeFactor(phi, r0, y));
+  const rBase = Math.min(G.a, r0);
+  const r = rBase * (1 + lobeFactor(phi, rBase, y));
   out[0] = r * Math.sin(phi);
   out[1] = y;
   out[2] = r * Math.cos(phi);
@@ -337,17 +339,27 @@ export class TomatoTop3D {
         return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y), mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
       }
       float seamY(float x) {
-        float u = clamp((x - 330.5) / 215.5, -1.0, 1.0);
+        float u = clamp((x - 330.5) / 216.0, -1.0, 1.0);
         return 298.8 + 0.5 * u - 18.2 * u * u - 15.2 * u * u * u * u;
       }
       void main() {
         vec3 n = normalize(vNor);
+        float dSeam = seamY(vSprite.x) - vSprite.y;
+        // 3D physical upper-lip bevel: in the last 3.6 px above the split, the upper shell
+        // curves inward into the recessed split gap (normal tilts downward and AO deepens).
+        float lipT = clamp(1.0 - dSeam / 3.6, 0.0, 1.0);
+        float lipCurve = lipT * lipT;
+        vec3 nLip = normalize(vec3(
+          n.x * (1.0 - 0.16 * lipCurve),
+          n.y - 0.68 * lipCurve,
+          max(0.08, n.z * (1.0 - 0.22 * lipCurve))
+        ));
         // surface grain + subtle organic skin variation + micro-normal bump, fixed to the body so they turn with it
         float g = vnoise(vBody * 1.25) * 0.62 + vnoise(vBody * 2.8) * 0.38;
         float gx = vnoise(vBody * 1.6 + vec3(4.1, 1.7, 8.3)) - 0.5;
         float gy = vnoise(vBody * 1.6 + vec3(9.2, 6.4, 2.5)) - 0.5;
         float m = vnoise(vBody * 0.055 + 7.3) * 0.58 + vnoise(vBody * 0.14 + 3.1) * 0.42;
-        vec2 nuv = clamp((n.xy + vec2(gx, gy) * (uGrain * 0.24)) * 0.5 + 0.5, 0.0, 1.0);
+        vec2 nuv = clamp((nLip.xy + vec2(gx, gy) * (uGrain * 0.24)) * 0.5 + 0.5, 0.0, 1.0);
         vec3 col = texture(uMatcap, nuv).rgb;
         // soft key-light shadow (only on surfaces that face the light; the matcap darkens the rest)
         vec3 sc = vLight * 0.5 + 0.5;
@@ -360,8 +372,13 @@ export class TomatoTop3D {
         lit /= 9.0;
         float facing = smoothstep(0.04, 0.32, dot(n, uLw));
         float shade = mix(1.0, mix(1.0 - uShadowK, 1.0, lit), facing);
-        col *= shade * vAO * (1.0 + uGrain * (g - 0.5) * 2.0) * (1.0 + uMottle * (m - 0.5) * 2.0);
-        float a = smoothstep(6.0, 13.0, seamY(vSprite.x) - vSprite.y);
+        float lipAO = 1.0 - 0.62 * lipCurve * lipT;
+        col *= shade * vAO * lipAO * (1.0 + uGrain * (g - 0.5) * 2.0) * (1.0 + uMottle * (m - 0.5) * 2.0);
+        float rHoriz = abs(vSprite.x - 330.5);
+        float edgeIndent = 1.15 * lipCurve;
+        float aEdge = smoothstep(0.0, 0.75, (216.0 - edgeIndent) - rHoriz);
+        float aSeam = smoothstep(-0.15, 0.65, dSeam);
+        float a = aSeam * aEdge;
         o = vec4(col * a, a);
       }`;
     this.progDepth = this._program(depthVS, depthFS);
@@ -410,6 +427,8 @@ export class TomatoTop3D {
           acc = 0;
         }
       }
+      // Short equatorial skirt below Y = 0 so the 3D upper shell reaches seamY(x) at full width a = 216.0 everywhere
+      ringR.push(G.a + 1.5, G.a + 3.5, G.a + 6.0, G.a + 9.0);
     }
     const NR = ringR.length;
     const SEG = 600;
