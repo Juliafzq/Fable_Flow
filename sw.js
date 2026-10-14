@@ -1,9 +1,10 @@
 // UNTO / FLOW — Phase 3 Service Worker (Network-First with no-cache revalidation + Offline Cache)
-const CACHE_NAME = 'fable-flow-cache-v72';
+const CACHE_NAME = 'fable-flow-cache-v73';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './css/style.css',
+  './css/noto-serif-sc.css',
   './js/app.js',
   './js/supabaseSync.js',
   './js/i18n.js',

@@ -33,7 +33,11 @@
   /* Sans stack (Chinese UI + fallback) and the English heritage serif */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Inter", "Helvetica Neue", sans-serif;
   --font-serif-en: 'EB Garamond', 'Times New Roman', Times, serif;
-  /* Active UI typeface: EB Garamond for English, original sans for Chinese */
+  /* Chinese: Songti (宋体) serif. Latin letters & digits stay in EB Garamond so both languages match.
+     Noto Serif SC is bundled with the app (works on every device); the rest are each platform's
+     built-in Songti as a fallback (Apple, Windows, Android/Linux). */
+  --font-serif-zh: 'EB Garamond', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', 'SimSun', 'Noto Serif CJK SC', serif;
+  /* Active UI typeface */
   --font-ui: var(--font-serif-en);
   --canvas-bg: #E7E8E2;
   --card-surface: #FFFFFF;
@@ -68,7 +72,12 @@ html, body {
 }
 
 html.lang-zh {
-  --font-ui: var(--font-sans);
+  --font-ui: var(--font-serif-zh);
+}
+
+html.lang-zh .about-block-signoff {
+  font-family: var(--font-serif-zh);
+  font-style: normal;
 }
 
 /* Buttons and form fields follow the UI typeface (browsers default them to the system font) */
@@ -80,8 +89,8 @@ select {
 }
 
 /* Big timer digits: even-width lining figures so the countdown never jiggles */
-html:not(.lang-zh) #hero-readout,
-html:not(.lang-zh) .grid-tomato-time {
+#hero-readout,
+.grid-tomato-time {
   font-variant-numeric: lining-nums tabular-nums;
 }
 
