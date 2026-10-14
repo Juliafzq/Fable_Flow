@@ -47,6 +47,8 @@ Long-press the Home Screen → **Edit → Add Widget** → search **UNTO / FLOW*
 For the Lock Screen: long-press the Lock Screen → **Customize → Lock Screen → widgets row**.
 Tapping the widget opens the app on a fresh tomato.
 
+> **Mac Desktop Widget tip:** If you have macOS Sonoma (14.0+) or Sequoia (15.0+), you can also put this exact widget on your Mac desktop without building a Mac app! Go to Mac **System Settings → Desktop & Dock → enable "Use iPhone widgets"**, then right-click your Mac desktop and click **Edit Widgets...** to add it. See [INSTALL_ON_MAC.md](INSTALL_ON_MAC.md) for details.
+
 ## The 7-day limit (free Apple ID)
 
 Apps signed with a free Personal Team **stop opening after 7 days**. Your data is kept. To renew:
