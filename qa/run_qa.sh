@@ -61,7 +61,8 @@ for g in $groups; do
                 "json:d['focusedImmediately'] and d['sizeIncreasesWhileTyping']==0 and d['afterCommit']==d['lastTypingSize']==d['afterRaf']" \
                 python3 shrink_test.py $size PORT
             done ;;
-    profile) job "Language dropdown: no auto-switch, persists" pass python3 lang_select_test.py PORT ;;
+    profile) job "Language dropdown: no auto-switch, persists" pass python3 lang_select_test.py PORT
+             job "Tomato Reset setting (Yes/No) at daily reset" pass python3 tomato_reset_test.py PORT ;;
     timer)  job "Timer keeps time in background/sleep/reopen" pass python3 timer_background_test.py PORT
             job "End bell: 3 rings, on time when hidden, tap stops" pass python3 chime_test.py PORT ;;
     assign) job "Lit mini tomato opens its timer, no unassign" pass python3 mini_tap_test.py PORT

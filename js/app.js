@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v70';
-import { CardGestureMath } from './cardGestureMath.js?v=20261014_v70';
-import { SensoryEngine } from './sensoryEngine.js?v=20261014_v70';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v70';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v70';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v71';
+import { CardGestureMath } from './cardGestureMath.js?v=20261014_v71';
+import { SensoryEngine } from './sensoryEngine.js?v=20261014_v71';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v71';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v71';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261014_v70';
+} from './i18n.js?v=20261014_v71';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -260,6 +260,7 @@ export class FableFlowApp {
       cardHeaderDate: todayMeta.headerDate,
       cardShortDate: todayMeta.shortDate,
       dailyResetHour: 5,
+      dailyTomatoReset: false,
       isSilentMode: false,
       hasCompletedOnboarding: false,
       seenPageHints: {},
@@ -396,10 +397,20 @@ export class FableFlowApp {
           if (typeof parsed.dailyResetHour !== 'number') {
             parsed.dailyResetHour = 5;
           }
+          parsed.dailyTomatoReset = Boolean(parsed.dailyTomatoReset);
           const currentLogicalKey = this.getCurrentLogicalDateString(parsed.dailyResetHour);
           const todayMeta = this.formatDateMetadataForKey(currentLogicalKey);
           if (!parsed.cardDateKey || parsed.cardDateKey !== currentLogicalKey) {
             const prevKey = parsed.cardDateKey;
+            // Reopened on a new day: reset the tomatoes too when the user chose "Tomato Reset: Yes"
+            if (
+              parsed.dailyTomatoReset &&
+              prevKey &&
+              /^\d{4}-\d{2}-\d{2}$/.test(prevKey) &&
+              prevKey < currentLogicalKey
+            ) {
+              this.resetAllTomatoesInState(parsed);
+            }
             const hasCustomTasks =
               Array.isArray(parsed.tasks) &&
               (parsed.tasks.length !== 1 ||
@@ -435,6 +446,9 @@ export class FableFlowApp {
                   ? [...parsed.reflectionPhotos]
                   : [],
               };
+              // Tomatoes that keep going into the new day keep their name, but are no longer
+              // linked to yesterday's (now archived) card items
+              this.unlinkTomatoesFromTasks(parsed);
               parsed.tasks = [
                 {
                   id: 'task-' + Date.now(),
@@ -633,6 +647,7 @@ export class FableFlowApp {
       profileOpenHomeBtn: document.getElementById('profile-open-home-btn'),
       profileGuidedTourBtn: document.getElementById('profile-guided-tour-btn'),
       profileResetTimeSelect: document.getElementById('profile-reset-time-select'),
+      profileTomatoResetSelect: document.getElementById('profile-tomato-reset-select'),
       profileToggleAudioBtn: document.getElementById('profile-toggle-audio-btn'),
       profileAudioStateLabel: document.getElementById('profile-audio-state-label'),
       profileLanguageSelect: document.getElementById('profile-language-select'),
@@ -820,6 +835,19 @@ export class FableFlowApp {
         this.renderAll();
         const padded = String(hourVal).padStart(2, '0') + ':00';
         this.showTelemetryToast(this.t('Daily reset time: {time}', { time: padded }));
+      });
+    }
+    if (this.els.profileTomatoResetSelect) {
+      this.els.profileTomatoResetSelect.addEventListener('change', (e) => {
+        this.state.dailyTomatoReset = e.target.value === 'yes';
+        this.saveState();
+        this.showTelemetryToast(
+          this.t(
+            this.state.dailyTomatoReset
+              ? 'Tomatoes reset daily with the card'
+              : 'Tomatoes keep running across days'
+          )
+        );
       });
     }
     if (this.els.profileLanguageSelect) {
@@ -1161,6 +1189,9 @@ export class FableFlowApp {
       const hr = typeof this.state.dailyResetHour === 'number' ? this.state.dailyResetHour : 5;
       this.els.profileResetTimeSelect.value = String(hr);
     }
+    if (this.els.profileTomatoResetSelect) {
+      this.els.profileTomatoResetSelect.value = this.state.dailyTomatoReset ? 'yes' : 'no';
+    }
     this.els.profileModalOverlay.classList.remove('hidden');
   }
 
@@ -1471,6 +1502,36 @@ export class FableFlowApp {
     }
   }
 
+  /** Clears all 6 tomatoes back to empty grey 00:00 (used by the daily "Tomato Reset" option). */
+  resetAllTomatoesInState(state) {
+    if (!state || !Array.isArray(state.timers)) return;
+    state.timers.forEach((s) => {
+      s.assignedTaskId = null;
+      s.assignedTaskOrder = null;
+      s.customTitle = null;
+      s.runState = 'idle';
+      s.mode = 'countdown';
+      s.configuredMinutes = 0;
+      s.remainingSeconds = 0;
+      s.angleDegrees = 0;
+      s.lastTickTimestamp = null;
+    });
+    if (Array.isArray(state.tasks)) {
+      state.tasks.forEach((t) => {
+        t.assignedQuadrant = null;
+      });
+    }
+  }
+
+  /** Keeps every tomato (title, time, running state) but detaches it from card items. */
+  unlinkTomatoesFromTasks(state) {
+    if (!state || !Array.isArray(state.timers)) return;
+    state.timers.forEach((s) => {
+      s.assignedTaskId = null;
+      s.assignedTaskOrder = null;
+    });
+  }
+
   simulateFiveAmRollover(targetDateKey = null) {
     const currentKey =
       this.state.cardDateKey || this.getCurrentLogicalDateString(this.state.dailyResetHour);
@@ -1520,17 +1581,18 @@ export class FableFlowApp {
     this.state.reflectionText = '';
     this.state.reflectionPhotos = [];
 
-    this.state.timers.forEach((s) => {
-      s.assignedTaskId = null;
-      s.assignedTaskOrder = null;
-      s.customTitle = null;
-      s.runState = 'idle';
-      s.mode = 'countdown';
-      s.configuredMinutes = 0;
-      s.remainingSeconds = 0;
-      s.angleDegrees = 0;
-      s.lastTickTimestamp = null;
-    });
+    if (this.state.dailyTomatoReset) {
+      this.resetAllTomatoesInState(this.state);
+    } else {
+      // Tomatoes keep running into the new day; they keep their names but are unlinked
+      // from yesterday's (now archived) card items
+      this.unlinkTomatoesFromTasks(this.state);
+    }
+    this.closeHeroTimeEditorDOM();
+    this.closeHeroTitleEditorDOM();
+    this.state.openDropdownQuadrant = null;
+    this.state.isHeroDropdownOpen = false;
+    this.armTimerDueAlarm();
 
     this.sensory.playCardFlipSwoosh();
     this.saveState();
