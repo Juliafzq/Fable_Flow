@@ -10,7 +10,7 @@
  *   at the physical silhouette horizon instead of fading out unnaturally.
  */
 
-import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261013_v68';
+import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261014_v69';
 
 export const HEIRLOOM_PALETTE = {
   0: {
@@ -317,11 +317,20 @@ export class HeroTomato3DView {
 
   _preloadImages() {
     const keys = [0, 1, 2, 3, 4, 5, 'completed', 'unassigned'];
-    keys.forEach((k) => {
+    // Load the tomatoes needed first (red, grey, silver) before the rest, so on a slow phone
+    // connection the hero / tutorial tomato isn't starved by six other downloads.
+    const firstBatch = [0, 'unassigned', 'completed'];
+    const secondBatch = keys.filter((k) => !firstBatch.includes(k));
+    let firstPending = firstBatch.length;
+    const loadKey = (k, onDone) => {
       const entry = HEIRLOOM_PALETTE[k];
-      if (!entry) return;
+      if (!entry) {
+        if (onDone) onDone();
+        return;
+      }
       const img = new Image();
-      img.src = entry.heroImg;
+      img.decoding = 'async';
+      let retried = false;
       img.onload = () => {
         this.images.set(k, img);
         const heroEl =
@@ -330,8 +339,35 @@ export class HeroTomato3DView {
           this.render();
         }
         if (this.images.size === keys.length) this._warmUpTwist();
+        if (onDone) onDone();
       };
-    });
+      img.onerror = () => {
+        // One retry on flaky mobile networks
+        if (!retried) {
+          retried = true;
+          setTimeout(() => {
+            img.src = entry.heroImg + (entry.heroImg.includes('?') ? '&' : '?') + 'r=1';
+          }, 800);
+          return;
+        }
+        if (onDone) onDone();
+      };
+      img.src = entry.heroImg;
+    };
+    let secondStarted = false;
+    const startSecond = () => {
+      if (secondStarted) return;
+      secondStarted = true;
+      secondBatch.forEach((k) => loadKey(k, null));
+    };
+    firstBatch.forEach((k) =>
+      loadKey(k, () => {
+        firstPending -= 1;
+        if (firstPending <= 0) startSecond();
+      })
+    );
+    // Never hold the remaining colours back for too long
+    setTimeout(startSecond, 12000);
   }
 
   /** Prepares the 3D top in idle moments, so the first look at the timer page doesn't stutter. */
@@ -1496,21 +1532,59 @@ export class HeroTomato3DView {
   _drawSpriteWithTop(ctx, key, img, thetaDeg) {
     const heroEl = typeof document !== 'undefined' ? document.getElementById('screen-hero') : null;
     const heroVisible = !heroEl || !heroEl.classList.contains('hidden');
-    if ((heroVisible || this._top3D || Math.abs(thetaDeg) > 0.01) && this._topReady(key)) {
-      const top = this._top3D;
-      const texOpts = {
-        shadow: key === 'completed' ? 0.24 : 0.48,
-        grain: key === 'completed' ? 0.0015 : 0.056,
-        mottle: key === 'completed' ? 0.002 : 0.034,
-      };
-      if (top.render(thetaDeg, key, texOpts)) {
-        ctx.drawImage(this._cleanPlates.get(key), 0, 0, this.baseW, this.baseH);
-        const B = TOP.box;
-        ctx.drawImage(top.canvas, B.x0, B.y0, B.x1 - B.x0, B.y1 - B.y0);
-        return;
+    if (
+      !this._top3DBroken &&
+      (heroVisible || this._top3D || Math.abs(thetaDeg) > 0.01)
+    ) {
+      try {
+        if (this._topReady(key)) {
+          const top = this._top3D;
+          const texOpts = {
+            shadow: key === 'completed' ? 0.24 : 0.48,
+            grain: key === 'completed' ? 0.0015 : 0.056,
+            mottle: key === 'completed' ? 0.002 : 0.034,
+          };
+          if (top.render(thetaDeg, key, texOpts) && this._topOutputLooksValid(top)) {
+            ctx.drawImage(this._cleanPlates.get(key), 0, 0, this.baseW, this.baseH);
+            const B = TOP.box;
+            ctx.drawImage(top.canvas, B.x0, B.y0, B.x1 - B.x0, B.y1 - B.y0);
+            return;
+          }
+        }
+      } catch (_) {
+        this._top3DBroken = true;
       }
     }
     ctx.drawImage(img, 0, 0, this.baseW, this.baseH);
+  }
+
+  /**
+   * One-time sanity check of the WebGL top half: some phone GPUs / browsers silently return a
+   * blank WebGL canvas. If nothing was drawn, fall back to the flat photo so the tomato never vanishes.
+   */
+  _topOutputLooksValid(top) {
+    if (this._topOutputChecked) return !this._top3DBroken;
+    try {
+      const probe = document.createElement('canvas');
+      probe.width = 16;
+      probe.height = 16;
+      const pctx = probe.getContext('2d', { willReadFrequently: true });
+      pctx.drawImage(top.canvas, 0, 0, 16, 16);
+      const data = pctx.getImageData(0, 0, 16, 16).data;
+      let opaque = 0;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 40) opaque++;
+      }
+      this._topOutputChecked = true;
+      if (opaque < 12) {
+        this._top3DBroken = true;
+        return false;
+      }
+      return true;
+    } catch (_) {
+      this._topOutputChecked = true;
+      return true;
+    }
   }
 
   /**
@@ -1544,6 +1618,11 @@ export class HeroTomato3DView {
     const key = this.isAssigned ? (this.quadrantIndex ?? 0) : 'unassigned';
     const drawnKey = this.images.get(key) ? key : 0;
     const img = this.images.get(drawnKey);
+    // Until the tomato photo has downloaded, draw nothing (never floating dial marks on their own)
+    if (!img || !img.complete) {
+      ctx.restore();
+      return;
+    }
     // The top half turns a full 360° with the dial, at the same surface speed as the numbers
     const twistDeg = (this.currentAngleDegrees / 6.0) * TOP_DEG_PER_MINUTE;
     if (img && img.complete && sBlend < 0.999) {

@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261013_v68';
-import { CardGestureMath } from './cardGestureMath.js?v=20261013_v68';
-import { SensoryEngine } from './sensoryEngine.js?v=20261013_v68';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261013_v68';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261013_v68';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v69';
+import { CardGestureMath } from './cardGestureMath.js?v=20261014_v69';
+import { SensoryEngine } from './sensoryEngine.js?v=20261014_v69';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v69';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v69';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261013_v68';
+} from './i18n.js?v=20261014_v69';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1449,19 +1449,25 @@ export class FableFlowApp {
         window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1')
     ) {
-      navigator.serviceWorker
-        .register('./sw.js', { updateViaCache: 'none' })
-        .then((reg) => {
-          if (reg && typeof reg.update === 'function') {
-            reg.update().catch(() => {});
-            document.addEventListener('visibilitychange', () => {
-              if (document.visibilityState === 'visible') {
-                reg.update().catch(() => {});
-              }
-            });
-          }
-        })
-        .catch(() => {});
+      // Register after the page has loaded, so the offline precache doesn't compete with the
+      // first-visit tomato downloads on a slow phone connection.
+      const doRegister = () =>
+        navigator.serviceWorker
+          .register('./sw.js', { updateViaCache: 'none' })
+          .then((reg) => {
+            if (reg && typeof reg.update === 'function') {
+              reg.update().catch(() => {});
+              document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                  reg.update().catch(() => {});
+                }
+              });
+            }
+          })
+          .catch(() => {});
+      const later = () => setTimeout(doRegister, navigator.serviceWorker.controller ? 0 : 2500);
+      if (document.readyState === 'complete') later();
+      else window.addEventListener('load', later, { once: true });
     }
   }
 
@@ -7523,6 +7529,16 @@ export class FableFlowApp {
     const blocks = this.els.aboutLetterBlocks
       ? Array.from(this.els.aboutLetterBlocks.querySelectorAll('.about-block'))
       : [];
+    // First visit: index.html already opened the letter and started the reveal before the
+    // app scripts loaded. Keep that reveal going instead of restarting it (no flash).
+    if (typeof window !== 'undefined' && window.__aboutBootReveal) {
+      window.__aboutBootReveal = false;
+      this._aboutTimers = Array.isArray(window.__aboutBootTimers) ? window.__aboutBootTimers : [];
+      window.__aboutBootTimers = null;
+      this.els.aboutModalOverlay.classList.remove('hidden');
+      this.fitAboutCardTypography();
+      return;
+    }
     blocks.forEach((b) => b.classList.remove('visible'));
     this.els.aboutModalOverlay.classList.remove('hidden');
     this.fitAboutCardTypography();

@@ -10,13 +10,16 @@
   <meta name="apple-mobile-web-app-title" content="UNTO / FLOW" />
   <meta name="application-name" content="UNTO / FLOW" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261013_v68" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261013_v68" />
-  <link rel="manifest" href="manifest.json?v=20261013_v68" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261014_v69" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261014_v69" />
+  <link rel="manifest" href="manifest.json?v=20261014_v69" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261013_v68" />
+  <link rel="stylesheet" href="css/style.css?v=20261014_v69" />
+  <!-- Start downloading the main hero tomatoes immediately, so the tutorial tomato is ready on slow phones -->
+  <link rel="preload" as="image" href="assets/tomatoes/hero-tomato-0.png?v=20261010_v26" />
+  <link rel="preload" as="image" href="assets/tomatoes/hero-tomato-grey.png?v=20261010_v26" />
 </head>
 <body>
 
@@ -71,7 +74,7 @@
     <!-- ===================================================================
          SCREEN 1: TODAY'S DUAL-SIDED CARD (Front 04-card-front.png & Back 05-card-back.png)
          =================================================================== -->
-    <section id="screen-card" class="screen-container">
+    <section id="screen-card" class="screen-container hidden">
       <div class="card-stage-perspective">
         <div id="daily-card-3d" class="daily-card-3d">
 
@@ -556,6 +559,37 @@
         </div>
       </div>
     </div>
+    <script>
+      // First-time visitors see the Welcome letter immediately (before the app scripts finish loading),
+      // instead of a placeholder card that gets replaced a few seconds later.
+      (function () {
+        var done = false;
+        try {
+          var raw = localStorage.getItem('fable_flow_phase2_mvp_v10') || localStorage.getItem('fable_flow_phase2_mvp_v9');
+          done = Boolean(raw && JSON.parse(raw).hasCompletedOnboarding);
+        } catch (e) {}
+        if (!done) {
+          var home = document.getElementById('screen-home');
+          var about = document.getElementById('about-modal-overlay');
+          if (home) home.classList.remove('hidden');
+          if (about) about.classList.remove('hidden');
+          var brand = document.getElementById('home-brand-title');
+          var pill = document.getElementById('top-segmented-pill');
+          if (brand) brand.classList.remove('hidden');
+          if (pill) pill.classList.add('hidden');
+          // Start the letter's calm line-by-line reveal right away; the app adopts these timers once loaded
+          var blocks = about ? about.querySelectorAll('.about-block') : [];
+          window.__aboutBootTimers = [];
+          for (var i = 0; i < blocks.length; i++) {
+            (function (el, idx) {
+              window.__aboutBootTimers.push(setTimeout(function () { el.classList.add('visible'); }, 200 + idx * 700));
+            })(blocks[i], i);
+          }
+          window.__aboutBootReveal = true;
+          document.documentElement.classList.add('first-run-boot');
+        }
+      })();
+    </script>
 
     <!-- Minimalist Non-Interactive Guided Tutorial Overlay (Simple Animated Dots on Page + Action, What it does, Last & Next) -->
     <div id="onboarding-overlay" class="guided-tour-overlay hidden" role="dialog" aria-modal="true" aria-label="Guided Tutorial">
@@ -586,6 +620,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261013_v68"></script>
+  <script type="module" src="js/app.js?v=20261014_v69"></script>
 </body>
 </html>

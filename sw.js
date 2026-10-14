@@ -1,5 +1,5 @@
 // UNTO / FLOW — Phase 3 Service Worker (Network-First with no-cache revalidation + Offline Cache)
-const CACHE_NAME = 'fable-flow-cache-v68';
+const CACHE_NAME = 'fable-flow-cache-v69';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   './js/sensoryEngine.js',
   './assets/icons/apple-touch-icon.png',
   './assets/icons/icon-512.png',
+  './assets/icons/icon-192.png',
   './assets/tomatoes/home-tomato.png',
   './assets/tomatoes/hero-tomato-0.png',
   './assets/tomatoes/hero-tomato-silver.png',
