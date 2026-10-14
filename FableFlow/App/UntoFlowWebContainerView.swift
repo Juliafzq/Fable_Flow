@@ -10,9 +10,23 @@ import UIKit
 struct UntoFlowWebContainerView: UIViewRepresentable {
     /// Live GitHub Pages URL so UI updates ship automatically without re-building in Xcode.
     static let liveAppURL = URL(string: "https://juliafzq.github.io/UNTO_FLOW/?native_ios=1")!
+    static let appHost = "juliafzq.github.io"
+
+    /// The single live coordinator (one window), used to forward widget deep links into the page.
+    private static weak var activeCoordinator: Coordinator?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        let coordinator = Coordinator()
+        Self.activeCoordinator = coordinator
+        return coordinator
+    }
+
+    /// `untoflow://timer` (from the widget) opens the hero tomato page on a free tomato.
+    static func handleDeepLink(_ url: URL) {
+        guard url.scheme == "untoflow" else { return }
+        if url.host == "timer" {
+            activeCoordinator?.runWhenLoaded(Coordinator.openTimerJS)
+        }
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -62,6 +76,70 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, UNUserNotificationCenterDelegate {
         weak var webView: WKWebView?
         private static let idPrefix = "com.untoflow.timer.slot."
+        private var pageLoaded = false
+        private var pendingScripts: [String] = []
+        private var askedForNotifications = false
+
+        /// Same as tapping the tomato on the app's home page (skipped during the first-time tour).
+        static let openTimerJS = """
+        (function () {
+          var a = window.fableFlowApp;
+          if (!a || !a.state.hasCompletedOnboarding) return false;
+          var free = a.state.timers.find(function (t) { return !t.assignedTaskId && !t.customTitle && t.runState === 'idle' && t.remainingSeconds === 0; })
+            || a.state.timers.find(function (t) { return !t.assignedTaskId && !t.customTitle; });
+          if (free) a.state.selectedQuadrant = free.quadrant;
+          a.state.activePillar = 'timer';
+          a.state.timerSubMode = 'hero';
+          a.saveState();
+          a.renderAll();
+          return true;
+        })();
+        """
+
+        func runWhenLoaded(_ script: String) {
+            if pageLoaded, let webView = webView {
+                webView.evaluateJavaScript(script, completionHandler: nil)
+            } else {
+                pendingScripts.append(script)
+            }
+        }
+
+        // MARK: WKNavigationDelegate
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            pageLoaded = true
+            let scripts = pendingScripts
+            pendingScripts.removeAll()
+            for script in scripts {
+                webView.evaluateJavaScript(script, completionHandler: nil)
+            }
+            // Ask for notification permission once, up front, so the 00:00 alert can ring when the app is closed
+            if !askedForNotifications {
+                askedForNotifications = true
+                requestNotificationPermission()
+            }
+        }
+
+        /// Links to other websites (and target=_blank links) open in Safari instead of inside the app.
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+            let isWeb = url.scheme == "http" || url.scheme == "https"
+            let isOwnSite = url.host == UntoFlowWebContainerView.appHost
+            let opensNewWindow = navigationAction.targetFrame == nil
+            if isWeb && (!isOwnSite || opensNewWindow) && navigationAction.navigationType == .linkActivated {
+                UIApplication.shared.open(url)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
         private let selectionHaptic = UISelectionFeedbackGenerator()
         private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
         private let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)

@@ -6,16 +6,84 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A800000126B0000100000001 /* UntoFlowWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A700000226B0000100000001 /* UntoFlowWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A820000126B0000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A900000126B0000100000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A200000226B0000100000001;
+			remoteInfo = UntoFlowWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A400000726B0000100000001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A800000126B0000100000001 /* UntoFlowWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A700000126B0000100000001 /* FableFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FableFlow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A700000226B0000100000001 /* UntoFlowWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = UntoFlowWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A600000126B0000100000001 /* Exceptions for "FableFlow" folder in "FableFlow" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				App/Info.plist,
+			);
+			target = A200000126B0000100000001 /* FableFlow */;
+		};
+		A600000226B0000100000001 /* Exceptions for "UntoFlowWidget" folder in "UntoFlowWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A200000226B0000100000001 /* UntoFlowWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A100000126B0000100000001 /* FableFlow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A600000126B0000100000001 /* Exceptions for "FableFlow" folder in "FableFlow" target */,
+			);
 			path = FableFlow;
+			sourceTree = "<group>";
+		};
+		A100000226B0000100000001 /* UntoFlowWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A600000226B0000100000001 /* Exceptions for "UntoFlowWidget" folder in "UntoFlowWidgetExtension" target */,
+			);
+			path = UntoFlowWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A400000226B0000100000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A400000526B0000100000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -29,7 +97,18 @@
 			isa = PBXGroup;
 			children = (
 				A100000126B0000100000001 /* FableFlow */,
+				A100000226B0000100000001 /* UntoFlowWidget */,
+				A000000226B0000100000001 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A000000226B0000100000001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A700000126B0000100000001 /* FableFlow.app */,
+				A700000226B0000100000001 /* UntoFlowWidgetExtension.appex */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -42,17 +121,40 @@
 				A400000126B0000100000001 /* Sources */,
 				A400000226B0000100000001 /* Frameworks */,
 				A400000326B0000100000001 /* Resources */,
+				A400000726B0000100000001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A810000126B0000100000001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A100000126B0000100000001 /* FableFlow */,
 			);
 			name = FableFlow;
 			productName = FableFlow;
+			productReference = A700000126B0000100000001 /* FableFlow.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A200000226B0000100000001 /* UntoFlowWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A300000326B0000100000001 /* Build configuration list for PBXNativeTarget "UntoFlowWidgetExtension" */;
+			buildPhases = (
+				A400000426B0000100000001 /* Sources */,
+				A400000526B0000100000001 /* Frameworks */,
+				A400000626B0000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A100000226B0000100000001 /* UntoFlowWidget */,
+			);
+			name = UntoFlowWidgetExtension;
+			productName = UntoFlowWidgetExtension;
+			productReference = A700000226B0000100000001 /* UntoFlowWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -65,6 +167,10 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					A200000126B0000100000001 = {
+						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
+					};
+					A200000226B0000100000001 = {
 						CreatedOnToolsVersion = 16.0;
 						ProvisioningStyle = Automatic;
 					};
@@ -81,16 +187,25 @@
 			mainGroup = A000000126B0000100000001;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = A000000226B0000100000001 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				A200000126B0000100000001 /* FableFlow */,
+				A200000226B0000100000001 /* UntoFlowWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A400000326B0000100000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A400000626B0000100000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -107,13 +222,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A400000426B0000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A810000126B0000100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A200000226B0000100000001 /* UntoFlowWidgetExtension */;
+			targetProxy = A820000126B0000100000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A500000126B0000100000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_BUNDLE_ID_BASE = com.juliafzq.untoflow;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
@@ -141,6 +272,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_BUNDLE_ID_BASE = com.juliafzq.untoflow;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
@@ -161,6 +293,7 @@
 		A500000326B0000100000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = FableFlow/App/FableFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 58;
@@ -175,7 +308,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.unto.flow.preview;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID_BASE)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -188,6 +321,7 @@
 		A500000426B0000100000001 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = FableFlow/App/FableFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 58;
@@ -202,8 +336,62 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.unto.flow.preview;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID_BASE)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A500000526B0000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 58;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UntoFlowWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "UNTO / FLOW";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID_BASE).widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A500000626B0000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 58;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = UntoFlowWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "UNTO / FLOW";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID_BASE).widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -229,6 +417,15 @@
 			buildConfigurations = (
 				A500000126B0000100000001 /* Debug */,
 				A500000226B0000100000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A300000326B0000100000001 /* Build configuration list for PBXNativeTarget "UntoFlowWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A500000526B0000100000001 /* Debug */,
+				A500000626B0000100000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

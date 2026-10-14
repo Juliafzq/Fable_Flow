@@ -23,3 +23,8 @@ Thumbs.db
 
 qa/shots/
 qa/__pycache__/
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
