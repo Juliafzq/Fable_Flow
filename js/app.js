@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v74';
-import { CardGestureMath } from './cardGestureMath.js?v=20261014_v74';
-import { SensoryEngine } from './sensoryEngine.js?v=20261014_v74';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v74';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v74';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v75';
+import { CardGestureMath } from './cardGestureMath.js?v=20261014_v75';
+import { SensoryEngine } from './sensoryEngine.js?v=20261014_v75';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v75';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v75';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261014_v74';
+} from './i18n.js?v=20261014_v75';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -70,6 +70,7 @@ export class FableFlowApp {
     this.initDOM();
     this.initLanguage();
     this.initMobilePortraitLock();
+    this.initDesktopAppWindow();
     this.init3DRenderers();
     this.bindGlobalEvents();
     this.startWallClockTicker();
@@ -113,6 +114,31 @@ export class FableFlowApp {
     }
   }
 
+  /**
+   * Installed as a desktop app (Chrome "Install UNTO / FLOW" on a Mac or PC): the first time it
+   * opens, shape the window like the phone app instead of a large mostly-empty window.
+   * Runs once; Chrome remembers any size the user picks after that.
+   */
+  initDesktopAppWindow() {
+    try {
+      if (typeof window.matchMedia !== 'function') return;
+      const standalone = window.matchMedia('(display-mode: standalone)').matches;
+      const desktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      if (!standalone || !desktop || window.innerWidth <= 520) return;
+      const sizedKey = 'fable_flow_desktop_window_sized';
+      if (localStorage.getItem(sizedKey)) return;
+      localStorage.setItem(sizedKey, '1');
+      const frameW = Math.max(0, window.outerWidth - window.innerWidth);
+      const frameH = Math.max(0, window.outerHeight - window.innerHeight);
+      const availW = (window.screen && window.screen.availWidth) || 1280;
+      const availH = (window.screen && window.screen.availHeight) || 900;
+      const w = 430 + frameW;
+      const h = Math.min(852 + frameH, availH - 40);
+      window.resizeTo(w, h);
+      window.moveTo(Math.max(0, Math.round((availW - w) / 2)), Math.max(0, Math.round((availH - h) / 2)));
+    } catch (_) {}
+  }
+
   initMobilePortraitLock() {
     const tryNativeLock = () => {
       try {
@@ -128,7 +154,11 @@ export class FableFlowApp {
     const updatePortraitLockState = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const isMobileLandscape = w > h && h <= 560;
+      // A short desktop window (mouse/trackpad) is not a phone on its side: never rotate it.
+      const isDesktopPointer =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      const isMobileLandscape = w > h && h <= 560 && !isDesktopPointer;
       const root = document.documentElement;
       if (isMobileLandscape) {
         let rawAngle = 90;
