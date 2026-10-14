@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v71';
-import { CardGestureMath } from './cardGestureMath.js?v=20261014_v71';
-import { SensoryEngine } from './sensoryEngine.js?v=20261014_v71';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v71';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v71';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v72';
+import { CardGestureMath } from './cardGestureMath.js?v=20261014_v72';
+import { SensoryEngine } from './sensoryEngine.js?v=20261014_v72';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v72';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v72';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261014_v71';
+} from './i18n.js?v=20261014_v72';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -82,11 +82,35 @@ export class FableFlowApp {
       this.state.activePillar = 'home';
     }
     this.renderAll();
+    this.refitTypographyWhenFontsLoad();
     this.initFirstTimeOnboarding();
     if (this.supabaseSync.isLoggedIn()) {
       this.syncFromAuthenticatedAccount(false);
     }
     this.registerServiceWorker();
+  }
+
+  /**
+   * The English UI uses the EB Garamond web font. Card text is sized to fit by measuring it,
+   * so re-fit once the font has actually loaded (otherwise sizes are computed with the fallback font).
+   */
+  refitTypographyWhenFontsLoad() {
+    if (typeof document === 'undefined' || !document.fonts) return;
+    const refit = () => {
+      const pillar = this.state.activePillar;
+      if (pillar === 'card') {
+        this.fitUnifiedCardTaskTypography(this.els.taskListContainer, this.els.addItemRow);
+        this.adjustReflectionTypography(this.els.cardBackReflection);
+      } else if (pillar === 'stack') {
+        this.fitUnifiedCardTaskTypography(this.els.stackTaskListContainer, this.els.stackAddItemRow);
+        this.adjustReflectionTypography(this.els.stackCardBackReflection);
+      }
+      this.fitAboutCardTypography();
+    };
+    document.fonts.ready.then(refit).catch(() => {});
+    if (typeof document.fonts.addEventListener === 'function') {
+      document.fonts.addEventListener('loadingdone', refit);
+    }
   }
 
   initMobilePortraitLock() {
@@ -1650,6 +1674,26 @@ export class FableFlowApp {
    * (`bodyEl.scrollHeight > bodyEl.clientHeight + 2`). When the whole page is filled,
    * decreases the unified font size uniformly for all items on that card together down to a 16.5px floor.
    */
+  /**
+   * Sizes a task text box to exactly N text lines (N x line-height), the same height the
+   * task title text has. scrollHeight is rounded up to whole pixels, which made the editor a
+   * fraction of a pixel taller than the title and could tip a full card into a smaller font size.
+   */
+  setTextareaHeightToLines(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    const cs = getComputedStyle(el);
+    const lh = parseFloat(cs.lineHeight);
+    const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    if (!(lh > 0)) {
+      el.style.height = `${el.scrollHeight}px`;
+      return;
+    }
+    const lines = Math.max(1, Math.round((el.scrollHeight - padV) / lh));
+    const borderV = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+    el.style.height = `${lines * lh + padV + borderV}px`;
+  }
+
   fitUnifiedCardTaskTypography(containerEl, addItemEl) {
     if (!containerEl) return 24;
     const bodyEl =
@@ -1671,8 +1715,7 @@ export class FableFlowApp {
         el.style.fontSize = sizeStr;
         if (el.classList.contains('task-inline-input')) {
           // Re-fit the text box height to this font size before measuring the card
-          el.style.height = 'auto';
-          el.style.height = `${el.scrollHeight}px`;
+          this.setTextareaHeightToLines(el);
         }
       });
       if (addItemEl) {
@@ -5792,11 +5835,8 @@ export class FableFlowApp {
     input.setAttribute('aria-label', this.t('Type task directly on card'));
 
     const syncHeight = (collapseFirst = true) => {
-      if (collapseFirst) {
-        input.style.height = 'auto';
-      }
       if (collapseFirst || input.scrollHeight > input.clientHeight + 2) {
-        input.style.height = `${input.scrollHeight}px`;
+        this.setTextareaHeightToLines(input);
       }
     };
 
@@ -5985,11 +6025,8 @@ export class FableFlowApp {
     input.setAttribute('aria-label', this.t('Edit task directly on card'));
 
     const syncEditHeight = (collapseFirst = true) => {
-      if (collapseFirst) {
-        input.style.height = 'auto';
-      }
       if (collapseFirst || input.scrollHeight > input.clientHeight + 2) {
-        input.style.height = `${input.scrollHeight}px`;
+        this.setTextareaHeightToLines(input);
       }
     };
 
