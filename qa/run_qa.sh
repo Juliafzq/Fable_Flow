@@ -46,7 +46,8 @@ for g in $groups; do
     bars)   job "Bars: slots, sizes, alignment" pass python3 qa_bars.py PORT ;;
     flip)   job "Flip: buttons, swipe, interrupted swipe" pass python3 flip2_test.py 390 844 PORT
             job "Past cards: swipe flips, edges scroll"  pass python3 stack_test.py PORT
-            job "Strikethroughs survive flipping"         pass python3 strike_flip_test.py PORT ;;
+            job "Strikethroughs survive flipping"         pass python3 strike_flip_test.py PORT
+            job "Flip only via button / empty space; stack edge scrolls" pass python3 gesture_rules_test.py PORT ;;
     edit)   job "Tap item -> edit opens (12 taps)"       pass python3 tap_edit_test.py 390 844 PORT
             job "Stray blur ignored, real blur saves"    pass python3 blur_test.py PORT
             job "× deletes item"                         pass python3 del_test.py PORT

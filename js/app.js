@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v69';
-import { CardGestureMath } from './cardGestureMath.js?v=20261014_v69';
-import { SensoryEngine } from './sensoryEngine.js?v=20261014_v69';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v69';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v69';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v70';
+import { CardGestureMath } from './cardGestureMath.js?v=20261014_v70';
+import { SensoryEngine } from './sensoryEngine.js?v=20261014_v70';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v70';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v70';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261014_v69';
+} from './i18n.js?v=20261014_v70';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1820,6 +1820,10 @@ export class FableFlowApp {
       ) {
         return;
       }
+      // Past cards: a swipe that starts on the card's left/right edge scrolls the stack, never flips
+      if (isStackCard && this.isInStackCardEdgeZone(e)) {
+        return;
+      }
       const pt = this.getPointerXY(e);
       startX = pt.x;
       startY = pt.y;
@@ -1917,6 +1921,16 @@ export class FableFlowApp {
     window.addEventListener('pointermove', onWindowPointerMove, { passive: false });
     window.addEventListener('pointerup', endCardSwipe);
     window.addEventListener('pointercancel', endCardSwipe);
+  }
+
+  /** True when the pointer is within the left/right edge band of the past (stack) card. */
+  isInStackCardEdgeZone(e) {
+    const cardEl = this.els.stackCard3D;
+    if (!cardEl || !e || e.clientX === undefined) return false;
+    const r = cardEl.getBoundingClientRect();
+    if (r.width <= 0) return false;
+    const band = Math.max(28, r.width * 0.1);
+    return e.clientX - r.left < band || r.right - e.clientX < band;
   }
 
   applyCard3DRotation(wrapperEl, isFlipped, degValue) {
@@ -2720,14 +2734,18 @@ export class FableFlowApp {
           e.target.closest('.task-inline-input') ||
           e.target.closest('.task-inline-edit-wrap') ||
           e.target.closest('.task-inline-delete-btn') ||
-          e.target.closest('#stack-card-3d') ||
+          (e.target.closest('#stack-card-3d') && !this.isInStackCardEdgeZone(e)) ||
           e.target.closest('textarea, input') ||
           this.els.stackCarouselStage.querySelector('.task-inline-input')
         ) {
           return;
         }
         // In Edit Mode, allow swiping on a task row to cross it out
-        if (this.state.isStackEditMode && e.target.closest('.task-row')) {
+        if (
+          this.state.isStackEditMode &&
+          e.target.closest('.task-row') &&
+          !this.isInStackCardEdgeZone(e)
+        ) {
           return;
         }
         const pt = this.getPointerXY(e);
@@ -5087,7 +5105,9 @@ export class FableFlowApp {
     let startX = null;
     let startY = null;
     let isTracking = false;
-    let startedAtLeftEdgeBezel = false;
+    // True when the swipe began on the blank part of the row (right of the text): that is
+    // empty card space, so it may flip the card. Swipes on the task text only cross out / undo.
+    let startedOnBlankSpace = false;
 
     rowEl.addEventListener('pointerdown', (e) => {
       if (isStackCard && !this.state.isStackEditMode) {
@@ -5101,6 +5121,10 @@ export class FableFlowApp {
         e.target.closest('.task-inline-delete-btn') ||
         e.target.closest('textarea, input')
       ) {
+        return;
+      }
+      // Past cards: swipes from the card's left/right edge scroll the stack instead
+      if (isStackCard && this.isInStackCardEdgeZone(e)) {
         return;
       }
       e.stopPropagation(); // QA #1: Prevent bubbling to #daily-card-3d / #stack-card-3d so flip doesn't double-toggle
@@ -5120,7 +5144,7 @@ export class FableFlowApp {
         }
       }
 
-      startedAtLeftEdgeBezel = relX < 24 || relX > maxTextRightX + 18;
+      startedOnBlankSpace = relX > maxTextRightX + 18;
       isTracking = true;
       try {
         rowEl.setPointerCapture(e.pointerId);
@@ -5137,7 +5161,7 @@ export class FableFlowApp {
       const activeWrapper = isStackCard ? this.els.stackCard3D : this.els.card3DWrapper;
       const baseDeg = isStackCard ? this._stackFlipDeg : this._todayFlipDeg;
 
-      if (startedAtLeftEdgeBezel || dx < -10) {
+      if (startedOnBlankSpace) {
         if (activeWrapper && Math.abs(dx) > Math.abs(dy) * 1.15) {
           const tiltOffset = Math.max(-65, Math.min(65, (dx / 180) * 65));
           const liveDeg = baseDeg + tiltOffset;
@@ -5199,18 +5223,17 @@ export class FableFlowApp {
         return;
       }
 
-      const gesture = CardGestureMath.classifyGesture(dx, dy, !startedAtLeftEdgeBezel);
-      if (gesture === 'strikethrough') {
+      const gesture = CardGestureMath.classifyGesture(dx, dy, !startedOnBlankSpace);
+      if (!startedOnBlankSpace && gesture === 'strikethrough') {
         curTask.isCompleted = !curTask.isCompleted;
         rowEl.dataset.completed = curTask.isCompleted ? 'true' : 'false';
         this.sensory.playPencilStrikethrough(!curTask.isCompleted);
         this.drawGraphiteStroke(strikeCanvas, 0.0, curTask.isCompleted ? 1.0 : 0.0);
         this.saveState();
       } else if (
-        gesture === 'flipCard' ||
-        ((startedAtLeftEdgeBezel || dx < -10) &&
-          Math.abs(dx) >= 22 &&
-          Math.abs(dx) > Math.abs(dy) * 1.15)
+        startedOnBlankSpace &&
+        (gesture === 'flipCard' ||
+          (Math.abs(dx) >= 22 && Math.abs(dx) > Math.abs(dy) * 1.15))
       ) {
         this.drawGraphiteStroke(strikeCanvas, 0.0, curTask.isCompleted ? 1.0 : 0.0);
         const dir = dx >= 0 ? 1 : -1;
@@ -6661,7 +6684,7 @@ export class FableFlowApp {
       // STEP 3: BACK OF CARD (DAILY REFLECTION)
       {
         title: 'Flip Page · Daily Reflection',
-        desc: 'Swipe card to write reflection & attach photos',
+        desc: 'Flip with the flip button or by swiping empty card space (not on items) to write reflection & attach photos',
         applyPage: () => {
           this.restoreTourDemoArchiveCards();
           this.state.activePillar = 'card';
@@ -6678,7 +6701,8 @@ export class FableFlowApp {
           const t = (elapsedMs % period) / period;
           const rightX = box.x + 62;
           const leftX = box.x - 62;
-          const swipeY = box.y - 16;
+          // Demonstrate the flip swipe on EMPTY card space (below the to-do items), never on a task
+          const swipeY = box.top + box.height * 0.8;
 
           if (t < 0.28) {
             // Dot moves Right -> Left while turning card 0deg -> -180deg

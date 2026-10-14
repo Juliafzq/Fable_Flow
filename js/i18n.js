@@ -161,6 +161,8 @@ const ZH = {
     '最多 8 条。划一下完成，再划一下撤销',
   'Flip Page · Daily Reflection': '卡片背面 · 今日回顾',
   'Swipe card to write reflection & attach photos': '滑动卡片翻面，写写今天、放几张照片',
+  'Flip with the flip button or by swiping empty card space (not on items) to write reflection & attach photos':
+    '点翻面按钮，或在卡片空白处滑动（不要在待办上）翻面，写写今天、放几张照片',
   'Tap Mini Tomato': '点击小番茄',
   'Link a daily to-do item to a focus timer': '给这条待办开一个番茄钟',
   'Turn Tomato Dial': '转动番茄',
