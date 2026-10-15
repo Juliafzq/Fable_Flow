@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v79';
-import { CardGestureMath } from './cardGestureMath.js?v=20261015_v79';
-import { SensoryEngine } from './sensoryEngine.js?v=20261015_v79';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v79';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v79';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v80';
+import { CardGestureMath } from './cardGestureMath.js?v=20261015_v80';
+import { SensoryEngine } from './sensoryEngine.js?v=20261015_v80';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v80';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v80';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261015_v79';
+} from './i18n.js?v=20261015_v80';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -748,10 +748,6 @@ export class FableFlowApp {
       authLastSyncedLabel: document.getElementById('auth-last-synced-label'),
       authSyncNowBtn: document.getElementById('auth-sync-now-btn'),
       authSignoutBtn: document.getElementById('auth-signout-btn'),
-      authConfigToggleBtn: document.getElementById('auth-config-toggle-btn'),
-      authConfigPanel: document.getElementById('auth-config-panel'),
-      authSupabaseUrlInput: document.getElementById('auth-supabase-url-input'),
-      authSupabaseKeyInput: document.getElementById('auth-supabase-key-input'),
       authSaveConfigBtn: document.getElementById('auth-save-config-btn'),
 
       onboardingOverlay: document.getElementById('onboarding-overlay'),
@@ -1371,27 +1367,6 @@ export class FableFlowApp {
         await this.handleAuthSignOut();
       });
     }
-    if (this.els.authConfigToggleBtn && this.els.authConfigPanel) {
-      this.els.authConfigToggleBtn.addEventListener('click', () => {
-        this.els.authConfigPanel.classList.toggle('hidden');
-      });
-    }
-    if (this.els.authSaveConfigBtn) {
-      this.els.authSaveConfigBtn.addEventListener('click', async () => {
-        const url = this.els.authSupabaseUrlInput ? this.els.authSupabaseUrlInput.value : '';
-        const key = this.els.authSupabaseKeyInput ? this.els.authSupabaseKeyInput.value : '';
-        this.supabaseSync.saveConfig(url, key);
-        if (this.supabaseSync.isLoggedIn()) {
-          await this.supabaseSync.pushCloudState(this.state);
-        }
-        this.renderAuthModalState();
-        this.showTelemetryToast(
-          this.supabaseSync.isCloudConfigured()
-            ? this.t('Supabase Cloud connected')
-            : this.t('Saved local vault mode')
-        );
-      });
-    }
   }
 
   openAuthModal(mode = null) {
@@ -1400,14 +1375,21 @@ export class FableFlowApp {
       this._authMode = mode;
     }
     this.hideAuthError();
-    if (this.els.authSupabaseUrlInput) {
-      this.els.authSupabaseUrlInput.value = (this.supabaseSync.config && this.supabaseSync.config.url) || '';
-    }
-    if (this.els.authSupabaseKeyInput) {
-      this.els.authSupabaseKeyInput.value = (this.supabaseSync.config && this.supabaseSync.config.anonKey) || '';
-    }
     this.renderAuthModalState();
     this.els.authModalOverlay.classList.remove('hidden');
+    this.refreshOAuthButtons();
+  }
+
+  /** Google / Apple buttons appear only once that sign-in is switched on in Supabase. */
+  async refreshOAuthButtons() {
+    const enabled = await this.supabaseSync.getEnabledOAuthProviders();
+    if (this.els.authGoogleBtn) this.els.authGoogleBtn.classList.toggle('hidden', !enabled.google);
+    if (this.els.authAppleBtn) this.els.authAppleBtn.classList.toggle('hidden', !enabled.apple);
+    const any = enabled.google || enabled.apple;
+    const row = document.getElementById('auth-oauth-row');
+    const divider = document.getElementById('auth-oauth-divider');
+    if (row) row.classList.toggle('hidden', !any);
+    if (divider) divider.classList.toggle('hidden', !any);
   }
 
   closeAuthModal() {

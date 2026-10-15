@@ -31,76 +31,22 @@ export class SupabaseSyncService {
     this._checkOAuthRedirectHash();
   }
 
+  /**
+   * The app always talks to its own built-in cloud project. (Earlier builds let a link like
+   * ?supabase_url=... or a saved setting swap in another server, which a bad actor could use to
+   * collect passwords, so those overrides are ignored and cleared.)
+   */
   _loadConfig() {
     try {
-      // 1. Support one-tap URL query provisioning (?supabase_url=...&supabase_key=...)
-      if (typeof window !== 'undefined' && window.location && window.location.search) {
-        const params = new URLSearchParams(window.location.search);
-        const qUrl = params.get('supabase_url');
-        const qKey = params.get('supabase_key') || params.get('supabase_anon_key');
-        if (qUrl && qKey) {
-          const cfg = {
-            url: String(qUrl).trim().replace(/\/+$/, ''),
-            anonKey: String(qKey).trim(),
-          };
-          localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(cfg));
-          params.delete('supabase_url');
-          params.delete('supabase_key');
-          params.delete('supabase_anon_key');
-          const cleanSearch = params.toString();
-          const newUrl =
-            window.location.pathname +
-            (cleanSearch ? `?${cleanSearch}` : '') +
-            (window.location.hash || '');
-          window.history.replaceState({}, document.title, newUrl);
-          return cfg;
-        }
-      }
-      // 2. Global window config override
-      if (
-        typeof window !== 'undefined' &&
-        window.FABLE_FLOW_SUPABASE_CONFIG &&
-        window.FABLE_FLOW_SUPABASE_CONFIG.url &&
-        window.FABLE_FLOW_SUPABASE_CONFIG.anonKey
-      ) {
-        return {
-          url: String(window.FABLE_FLOW_SUPABASE_CONFIG.url).trim().replace(/\/+$/, ''),
-          anonKey: String(window.FABLE_FLOW_SUPABASE_CONFIG.anonKey).trim(),
-        };
-      }
-      // 3. LocalStorage saved config
-      const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.url && parsed.anonKey) {
-          return {
-            url: String(parsed.url || '').trim().replace(/\/+$/, ''),
-            anonKey: String(parsed.anonKey || '').trim(),
-          };
-        }
-      }
-      // 4. Built-in default project config
-      if (DEFAULT_SUPABASE_CONFIG.url && DEFAULT_SUPABASE_CONFIG.anonKey) {
-        return {
-          url: String(DEFAULT_SUPABASE_CONFIG.url).trim().replace(/\/+$/, ''),
-          anonKey: String(DEFAULT_SUPABASE_CONFIG.anonKey).trim(),
-        };
-      }
-      return { url: '', anonKey: '' };
-    } catch (_) {
-      return { url: '', anonKey: '' };
-    }
-  }
-
-  saveConfig(url, anonKey) {
-    this.config = {
-      url: String(url || '').trim().replace(/\/+$/, ''),
-      anonKey: String(anonKey || '').trim(),
-    };
-    try {
-      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(this.config));
+      localStorage.removeItem(CONFIG_STORAGE_KEY);
     } catch (_) {}
-    return this.config;
+    if (DEFAULT_SUPABASE_CONFIG.url && DEFAULT_SUPABASE_CONFIG.anonKey) {
+      return {
+        url: String(DEFAULT_SUPABASE_CONFIG.url).trim().replace(/\/+$/, ''),
+        anonKey: String(DEFAULT_SUPABASE_CONFIG.anonKey).trim(),
+      };
+    }
+    return { url: '', anonKey: '' };
   }
 
   isCloudConfigured() {
@@ -568,6 +514,28 @@ export class SupabaseSyncService {
     }
     this.passwordRecoveryPending = false;
     return true;
+  }
+
+  /** Which social sign-ins are switched on in Supabase ({ google, apple }); cached for 5 minutes. */
+  async getEnabledOAuthProviders() {
+    const none = { google: false, apple: false };
+    if (!this.isCloudConfigured()) return none;
+    if (this._oauthProviders && Date.now() - this._oauthProvidersAt < 5 * 60 * 1000) {
+      return this._oauthProviders;
+    }
+    try {
+      const res = await this._fetch(`${this.config.url}/auth/v1/settings`, {
+        headers: { apikey: this.config.anonKey },
+      });
+      if (!res.ok) return none;
+      const settings = await res.json();
+      const ext = (settings && settings.external) || {};
+      this._oauthProviders = { google: ext.google === true, apple: ext.apple === true };
+      this._oauthProvidersAt = Date.now();
+      return this._oauthProviders;
+    } catch (_) {
+      return none;
+    }
   }
 
   async _isExternalOAuthEnabled(provider) {

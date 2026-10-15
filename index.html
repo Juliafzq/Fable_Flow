@@ -10,14 +10,14 @@
   <meta name="apple-mobile-web-app-title" content="UNTO / FLOW" />
   <meta name="application-name" content="UNTO / FLOW" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261015_v79" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261015_v79" />
-  <link rel="manifest" href="manifest.json?v=20261015_v79" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261015_v80" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261015_v80" />
+  <link rel="manifest" href="manifest.json?v=20261015_v80" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261015_v79" />
-  <link rel="stylesheet" href="css/noto-serif-sc.css?v=20261015_v79" />
+  <link rel="stylesheet" href="css/style.css?v=20261015_v80" />
+  <link rel="stylesheet" href="css/noto-serif-sc.css?v=20261015_v80" />
   <link rel="preload" href="assets/fonts/eb-garamond-latin.woff2" as="font" type="font/woff2" crossorigin />
   <!-- Start downloading the main hero tomatoes immediately, so the tutorial tomato is ready on slow phones -->
   <link rel="preload" as="image" href="assets/tomatoes/hero-tomato-0.png?v=20261010_v26" />
@@ -477,6 +477,10 @@
             <option value="zh">简体中文</option>
           </select>
         </label>
+        <a id="profile-contact-link" class="profile-menu-row profile-menu-link" href="mailto:flow@untoworld.com?subject=UNTO%20%2F%20FLOW">
+          <span>Contact</span>
+          <span class="profile-menu-val">↗</span>
+        </a>
       </div>
     </div>
 
@@ -504,9 +508,9 @@
             <button type="button" id="auth-forgot-btn" class="auth-link-btn">Forgot password?</button>
           </form>
 
-          <div class="auth-divider-row"><span>or</span></div>
+          <div id="auth-oauth-divider" class="auth-divider-row hidden"><span>or</span></div>
 
-          <div class="auth-oauth-row">
+          <div id="auth-oauth-row" class="auth-oauth-row hidden">
             <button type="button" id="auth-google-btn" class="auth-oauth-btn">
               <svg class="auth-oauth-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -552,15 +556,6 @@
           </div>
         </div>
 
-        <!-- Collapsible Supabase Project Configuration (Free Tier Cloud Connection) -->
-        <div class="auth-config-footer">
-          <button type="button" id="auth-config-toggle-btn" class="auth-config-toggle-btn">Supabase Cloud Keys ▾</button>
-          <div id="auth-config-panel" class="auth-config-panel hidden">
-            <input id="auth-supabase-url-input" type="url" class="modal-input auth-input auth-config-input" placeholder="https://your-project.supabase.co" />
-            <input id="auth-supabase-key-input" type="text" class="modal-input auth-input auth-config-input" placeholder="Supabase Anon Public Key" />
-            <button type="button" id="auth-save-config-btn" class="modal-btn auth-save-config-btn">Save Keys</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -645,6 +640,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261015_v79"></script>
+  <script type="module" src="js/app.js?v=20261015_v80"></script>
 </body>
 </html>

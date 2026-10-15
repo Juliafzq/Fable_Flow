@@ -145,6 +145,7 @@ const ZH = {
   "No account on this device. Accounts don't sync between devices yet.": '这台设备上没有这个账号。账号暂时还不能在设备之间同步。',
   'Incorrect password': '密码不对，请再试一次',
   'Wrong email or password': '邮箱或密码不对',
+  'Contact': '联系我们',
   "Can't reach the sync server. Check your internet connection, or try another Wi-Fi or mobile data.": '连不上同步服务器。请检查网络，或换个 Wi-Fi / 用手机流量再试。',
   'No account found under this email.': '这个邮箱下没有账号。',
   'Wrong password. Try again, or tap "Forgot password?"': '密码不对。请再试一次，或点“忘记密码？”',

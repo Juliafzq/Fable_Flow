@@ -2680,6 +2680,17 @@ html.mobile-landscape-locked .app-viewport {
   word-break: break-all;
 }
 
+.profile-menu-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.auth-oauth-btn.hidden,
+.auth-oauth-row.hidden,
+.auth-divider-row.hidden {
+  display: none;
+}
+
 .auth-primary-btn {
   width: 100%;
   height: 38px;
