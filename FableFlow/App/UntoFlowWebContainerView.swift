@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import UserNotifications
 import UIKit
+import WidgetKit
 
 /// Full-screen native iOS wrapper for UNTO / FLOW.
 /// Bridges the web app's tomato timers directly to iOS `UNUserNotificationCenter`
@@ -48,6 +49,11 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
             forMainFrameOnly: false
         )
         contentController.addUserScript(script)
+        contentController.addUserScript(WKUserScript(
+            source: Coordinator.widgetSyncHookJS,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
         config.userContentController = contentController
 
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -96,6 +102,131 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
         })();
         """
 
+        // MARK: Widget sync (today's tasks <-> medium widget)
+
+        /// Sends today's tasks to the widget whenever the web app saves, without changing the web code:
+        /// it wraps `fableFlowApp.saveState` once the app object exists.
+        static let widgetSyncHookJS = """
+        (function () {
+          function send() {
+            var a = window.fableFlowApp;
+            if (!a || !a.state || !Array.isArray(a.state.tasks)) return;
+            try {
+              var tasks = a.state.tasks.slice()
+                .sort(function (x, y) { return (x.orderIndex || 0) - (y.orderIndex || 0); })
+                .map(function (t) {
+                  var title = String(t.title || '');
+                  if (typeof a.displayTaskTitle === 'function') title = String(a.displayTaskTitle(title));
+                  return { id: String(t.id), title: title, isCompleted: !!t.isCompleted };
+                })
+                .filter(function (t) { return t.title.trim().length > 0; });
+              window.webkit.messageHandlers.untoNative.postMessage({ action: 'widgetSync', tasks: tasks });
+            } catch (e) {}
+          }
+          var timer = null;
+          function sendSoon() {
+            clearTimeout(timer);
+            timer = setTimeout(send, 400);
+          }
+          function hook() {
+            var a = window.fableFlowApp;
+            if (!a || !a.state || typeof a.saveState !== 'function') { setTimeout(hook, 300); return; }
+            if (a.__untoWidgetHooked) return;
+            a.__untoWidgetHooked = true;
+            var original = a.saveState;
+            a.saveState = function () {
+              var result = original.apply(this, arguments);
+              sendSoon();
+              return result;
+            };
+            document.addEventListener('visibilitychange', send);
+            send();
+          }
+          hook();
+        })();
+        """
+
+        private var lastSyncedTasks: [WidgetCardTask]?
+        private var isObservingWidgetEdits = false
+
+        /// Listens for cross-outs made in the widget (and for the app coming back to the front).
+        func startObservingWidgetEdits() {
+            guard !isObservingWidgetEdits else { return }
+            isObservingWidgetEdits = true
+            CFNotificationCenterAddObserver(
+                CFNotificationCenterGetDarwinNotifyCenter(),
+                Unmanaged.passUnretained(self).toOpaque(),
+                { _, observer, _, _, _ in
+                    guard let observer = observer else { return }
+                    let coordinator = Unmanaged<Coordinator>.fromOpaque(observer).takeUnretainedValue()
+                    DispatchQueue.main.async { coordinator.applyWidgetEdits() }
+                },
+                WidgetSharedStore.didEditNotification as CFString,
+                nil,
+                .deliverImmediately
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(appDidBecomeActive),
+                name: UIApplication.didBecomeActiveNotification,
+                object: nil
+            )
+        }
+
+        deinit {
+            CFNotificationCenterRemoveEveryObserver(
+                CFNotificationCenterGetDarwinNotifyCenter(),
+                Unmanaged.passUnretained(self).toOpaque()
+            )
+            NotificationCenter.default.removeObserver(self)
+        }
+
+        @objc private func appDidBecomeActive() {
+            applyWidgetEdits()
+        }
+
+        /// Copies cross-outs made in the widget onto today's card in the web app.
+        func applyWidgetEdits() {
+            guard pageLoaded, let webView = webView else { return }
+            let edits = WidgetSharedStore.pendingEdits()
+            guard !edits.isEmpty,
+                  let data = try? JSONSerialization.data(withJSONObject: edits),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let script = """
+            (function (edits) {
+              var a = window.fableFlowApp;
+              if (!a || !a.state || !Array.isArray(a.state.tasks)) return false;
+              var changed = false;
+              a.state.tasks.forEach(function (t) {
+                var key = String(t.id);
+                if (Object.prototype.hasOwnProperty.call(edits, key) && !!t.isCompleted !== edits[key]) {
+                  t.isCompleted = edits[key];
+                  changed = true;
+                }
+              });
+              if (changed) { a.saveState(); a.renderAll(); }
+              return true;
+            })(\(json));
+            """
+            webView.evaluateJavaScript(script) { result, _ in
+                if (result as? Bool) == true {
+                    WidgetSharedStore.clearPendingEdits(edits)
+                }
+            }
+        }
+
+        private func handleWidgetSync(_ body: [String: Any]) {
+            guard let rawTasks = body["tasks"] as? [[String: Any]] else { return }
+            let tasks = rawTasks.compactMap { raw -> WidgetCardTask? in
+                guard let id = raw["id"] as? String, let title = raw["title"] as? String else { return nil }
+                return WidgetCardTask(id: id, title: title, isCompleted: (raw["isCompleted"] as? Bool) ?? false)
+            }
+            guard tasks != lastSyncedTasks else { return }
+            lastSyncedTasks = tasks
+            WidgetSharedStore.updateFromApp(tasks: tasks)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+
         func runWhenLoaded(_ script: String) {
             if pageLoaded, let webView = webView {
                 webView.evaluateJavaScript(script, completionHandler: nil)
@@ -118,6 +249,8 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
                 askedForNotifications = true
                 requestNotificationPermission()
             }
+            startObservingWidgetEdits()
+            applyWidgetEdits()
         }
 
         /// Links to other websites (and target=_blank links) open in Safari instead of inside the app.
@@ -204,6 +337,9 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
             case "haptic":
                 let style = (body["style"] as? String) ?? "tick"
                 triggerHaptic(style: style)
+
+            case "widgetSync":
+                handleWidgetSync(body)
 
             default:
                 break

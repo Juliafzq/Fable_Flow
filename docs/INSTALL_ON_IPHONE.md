@@ -43,9 +43,19 @@ No paid Apple Developer Program needed. It's for personal testing before publish
 8. When the app asks to **send notifications, tap Allow**. That's what makes the bell ring when the app is closed.
 
 ### Add the widget
-Long-press the Home Screen → **Edit → Add Widget** → search **UNTO / FLOW** → choose the small widget.
+Long-press the Home Screen → **Edit → Add Widget** → search **UNTO / FLOW** → pick a size.
 For the Lock Screen: long-press the Lock Screen → **Customize → Lock Screen → widgets row**.
-Tapping the widget opens the app on a fresh tomato.
+
+| Size | What it does |
+|---|---|
+| **Small** | A tomato with a countdown. **− / +** sets the length (5-minute steps, 5 to 180 min). Tap the tomato to start, again to pause; **■** stops. The bell rings at 00:00. |
+| **Medium** | Same tomato with big countdown digits, plus today's to-do list from the front of your card. Tap a task to cross it out (tap again to undo). The app picks up the change next time it's open. |
+| **Lock Screen** | Shows the live countdown while a tomato runs. |
+
+Tapping anywhere else on the widget opens the app on a fresh tomato.
+
+> The widget's timer runs inside the widget, separate from the four tomatoes in the app.
+> The to-do list appears after you open the app once (it hands today's tasks to the widget).
 
 > **Mac Desktop Widget tip:** If you have macOS Sonoma (14.0+) or Sequoia (15.0+), you can also put this exact widget on your Mac desktop without building a Mac app! Go to Mac **System Settings → Desktop & Dock → enable "Use iPhone widgets"**, then right-click your Mac desktop and click **Edit Widgets...** to add it. See [INSTALL_ON_MAC.md](INSTALL_ON_MAC.md) for details.
 
@@ -72,4 +82,5 @@ plug the phone into the Mac, open the project, press **▶ Run** again (about 1 
 | "Signing requires a development team" | Pick your Personal Team for **both** targets (step 2). |
 | "Developer Mode disabled" | iPhone Settings → Privacy & Security → Developer Mode → On. |
 | "Your maximum number of apps has been reached" | Free accounts can have only a few test apps per phone. Delete another test app you built, then Run again. |
+| Signing error mentioning **Keychain Sharing** or `keychain-access-groups` | Click the blue project icon → for **both** targets open **Signing & Capabilities** → delete the **Keychain Sharing** box (trash icon). The widget timer still works; only the to-do list stops updating from the app. |
 | Any red build error | Take a screenshot of the error (or copy the text from the Issue navigator, ⌘5) and send it to me. |
