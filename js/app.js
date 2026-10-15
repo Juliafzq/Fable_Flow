@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261014_v75';
-import { CardGestureMath } from './cardGestureMath.js?v=20261014_v75';
-import { SensoryEngine } from './sensoryEngine.js?v=20261014_v75';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261014_v75';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261014_v75';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v76';
+import { CardGestureMath } from './cardGestureMath.js?v=20261015_v76';
+import { SensoryEngine } from './sensoryEngine.js?v=20261015_v76';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v76';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v76';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261014_v75';
+} from './i18n.js?v=20261015_v76';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -1959,6 +1959,10 @@ export class FableFlowApp {
       if (isStackCard && this.isInStackCardEdgeZone(e)) {
         return;
       }
+      // Past cards: touching a card that is still gliding into place catches it (no flip)
+      if (isStackCard && this._stackFilm) {
+        return;
+      }
       const pt = this.getPointerXY(e);
       startX = pt.x;
       startY = pt.y;
@@ -2358,6 +2362,265 @@ export class FableFlowApp {
     }
   }
 
+  // =========================================================================
+  // STACK FILMSTRIP: past cards move under the finger 1:1 (direct manipulation)
+  // The real card element (R) renders one date at a time; when a second date becomes
+  // visible, R is snapshotted into a static clone and re-rendered as the neighbour.
+  // Position is a continuous card index `c`; card j sits at x = (j - c) * width.
+  // =========================================================================
+
+  _beginStackFilmstrip() {
+    if (this._stackFilm) return this._stackFilm;
+    const stage = this.els.stackCarouselStage;
+    const real = stage && stage.querySelector('.stack-center-perspective');
+    if (!stage || !real || this.state.activePillar !== 'stack' || this._isZoomTransitioning) {
+      return null;
+    }
+    const keys = this.getNavigableStackDateKeys();
+    if (keys.length === 0) return null;
+    let idx = keys.indexOf(this.state.selectedStackDateKey);
+    if (idx < 0) idx = keys.length - 1;
+
+    // Clear any button/peek slide animation still running
+    stage.querySelectorAll('.stack-outgoing-card-clone').forEach((el) => el.remove());
+    clearTimeout(this._stackSlideCleanupTimer);
+    real.classList.remove('anim-slide-next', 'anim-slide-prev', 'anim-bounce-next', 'anim-bounce-prev');
+
+    const film = {
+      stage,
+      real,
+      keys,
+      w: real.offsetWidth + 16,
+      c: idx,
+      rIdx: idx,
+      clones: new Map(),
+      origIdx: idx,
+      origKey: keys[idx],
+      origFlipped: Boolean(this.state.isStackCardFlipped),
+      origFlipDeg: this._stackFlipDeg,
+      origEdit: Boolean(this.state.isStackEditMode),
+      downIdx: idx,
+      settling: false,
+      target: idx,
+      raf: null,
+      fromWheel: false,
+      lastWheelT: 0,
+      wheelRaw: null,
+      wheelSamples: [],
+      wheelTimer: null,
+    };
+    this._stackFilm = film;
+    real.style.transition = 'none';
+    stage.classList.add('is-filmstrip');
+    return film;
+  }
+
+  /** iOS-style resistance past the first / last card (c in card units). */
+  _stackFilmRubberBand(film, c) {
+    const max = film.keys.length - 1;
+    if (c < 0) return -(1 - 1 / (-c * 0.55 + 1));
+    if (c > max) return max + (1 - 1 / ((c - max) * 0.55 + 1));
+    return c;
+  }
+
+  _snapshotStackFilmCard(film) {
+    const src = film.real;
+    const clone = src.cloneNode(true);
+    clone.classList.remove(
+      'stack-center-perspective',
+      'anim-slide-next',
+      'anim-slide-prev',
+      'anim-bounce-next',
+      'anim-bounce-prev'
+    );
+    clone.classList.add('stack-filmstrip-clone');
+    clone.removeAttribute('id');
+    clone.querySelectorAll('[id]').forEach((node) => {
+      node.dataset.cloneId = node.id;
+      node.removeAttribute('id');
+    });
+    // Keep the pencil strikethroughs (canvas bitmaps aren't copied by cloneNode)
+    const srcCanvases = src.querySelectorAll('canvas');
+    const dstCanvases = clone.querySelectorAll('canvas');
+    srcCanvases.forEach((c, i) => {
+      const d = dstCanvases[i];
+      if (d && c.width > 0 && c.height > 0) {
+        d.width = c.width;
+        d.height = c.height;
+        const ctx = d.getContext('2d');
+        if (ctx) ctx.drawImage(c, 0, 0);
+      }
+    });
+    clone.style.cssText = '';
+    clone.style.left = `${src.offsetLeft}px`;
+    clone.style.top = `${src.offsetTop}px`;
+    clone.style.width = `${src.offsetWidth}px`;
+    clone.style.height = `${src.offsetHeight}px`;
+    film.stage.appendChild(clone);
+    return clone;
+  }
+
+  _renderStackFilmIndex(film, j) {
+    this.state.selectedStackDateKey = film.keys[j];
+    if (j === film.origIdx) {
+      this.state.isStackCardFlipped = film.origFlipped;
+      this._stackFlipDeg = film.origFlipDeg;
+      this.state.isStackEditMode = film.origEdit;
+    } else {
+      this.state.isStackCardFlipped = false;
+      this._stackFlipDeg = 0;
+      this.state.isStackEditMode = false;
+    }
+    film.rIdx = j;
+    this.renderStackScreen();
+  }
+
+  _layoutStackFilmstrip() {
+    const film = this._stackFilm;
+    if (!film) return;
+    const max = film.keys.length - 1;
+    const needed = [];
+    [Math.floor(film.c), Math.ceil(film.c)].forEach((j) => {
+      if (j >= 0 && j <= max && Math.abs(j - film.c) < 1 && !needed.includes(j)) needed.push(j);
+    });
+    // Every card that is (even partly) on screen needs a layer showing it
+    needed.forEach((j) => {
+      if (j === film.rIdx || film.clones.has(j)) return;
+      if (needed.includes(film.rIdx) && !film.clones.has(film.rIdx)) {
+        film.clones.set(film.rIdx, this._snapshotStackFilmCard(film));
+      }
+      this._renderStackFilmIndex(film, j);
+    });
+    film.clones.forEach((el, j) => {
+      if (Math.abs(j - film.c) >= 1.5) {
+        el.remove();
+        film.clones.delete(j);
+      }
+    });
+    const xOf = (j) => ((j - film.c) * film.w).toFixed(2);
+    film.real.style.transform = `translate3d(${xOf(film.rIdx)}px, 0, 0)`;
+    film.clones.forEach((el, j) => {
+      el.style.transform = `translate3d(${xOf(j)}px, 0, 0)`;
+    });
+  }
+
+  /**
+   * Glide to card `target`, starting at exactly the finger's release speed (vC, cards per ms)
+   * and easing to a stop on the card, so the motion is a seamless continuation of the gesture
+   * (a cubic Hermite curve: matches position + velocity at release, zero velocity on arrival).
+   */
+  _settleStackFilmstrip(target, vC = 0) {
+    const film = this._stackFilm;
+    if (!film) return;
+    cancelAnimationFrame(film.raf);
+    film.settling = true;
+    film.target = target;
+    film.wheelRaw = null;
+    if (target !== film.downIdx) this.sensory.playStackRiffleTick();
+    const x0 = film.c - target; // cards from the target
+    const v0 = vC; // cards per ms
+    const dist = Math.abs(x0);
+    const towards = v0 * -x0 > 0;
+    let T;
+    if (dist < 0.001) {
+      T = 1;
+    } else if (towards) {
+      // Constant-deceleration time for this speed, kept within a natural range
+      T = Math.max(220, Math.min(420, (2 * dist) / Math.abs(v0)));
+      if ((Math.abs(v0) * T) / dist > 3) T = (3 * dist) / Math.abs(v0); // no overshoot
+    } else {
+      T = 360;
+    }
+    const t0 = performance.now();
+    const step = (now) => {
+      if (this._stackFilm !== film || !film.settling) return;
+      const s = Math.min(1, (now - t0) / T);
+      const h00 = 2 * s * s * s - 3 * s * s + 1;
+      const h10 = s * s * s - 2 * s * s + s;
+      film.c = target + h00 * x0 + h10 * T * v0;
+      this._layoutStackFilmstrip();
+      if (s >= 1) {
+        film.c = target;
+        this._finishStackFilmstrip();
+        return;
+      }
+      film.raf = requestAnimationFrame(step);
+    };
+    film.raf = requestAnimationFrame(step);
+  }
+
+  /** Lands on the settle target (or nearest card), removes snapshots and commits the date. */
+  _finishStackFilmstrip() {
+    const film = this._stackFilm;
+    if (!film) return;
+    cancelAnimationFrame(film.raf);
+    clearTimeout(film.wheelTimer);
+    const max = film.keys.length - 1;
+    const target = film.settling
+      ? film.target
+      : Math.max(0, Math.min(max, Math.round(film.c)));
+    if (film.rIdx !== target) this._renderStackFilmIndex(film, target);
+    film.clones.forEach((el) => el.remove());
+    film.clones.clear();
+    film.real.style.transform = '';
+    void film.real.offsetWidth;
+    film.real.style.transition = '';
+    film.stage.classList.remove('is-filmstrip');
+    this._stackFilm = null;
+    this._stackStripSmoothOnce = true;
+    this.saveState();
+    this.renderAll();
+  }
+
+  /** Trackpad two-finger horizontal swipe: same 1:1 filmstrip, one card per gesture. */
+  _onStackFilmstripWheel(deltaX) {
+    const now = performance.now();
+    let film = this._stackFilm;
+    if (film && film.settling) {
+      // Ignore the momentum tail of the swipe that just settled
+      if (film.fromWheel && now - film.lastWheelT < 180) {
+        film.lastWheelT = now;
+        return;
+      }
+      cancelAnimationFrame(film.raf);
+      film.raf = null;
+      film.settling = false;
+      film.downIdx = Math.round(film.c);
+      film.wheelRaw = null;
+    }
+    if (!film) {
+      film = this._beginStackFilmstrip();
+      if (!film) return;
+      film.downIdx = film.rIdx;
+    }
+    film.fromWheel = true;
+    film.lastWheelT = now;
+    film.wheelSamples = film.wheelSamples.filter((s) => now - s.t < 100);
+    film.wheelSamples.push({ t: now, d: deltaX });
+    const raw = (film.wheelRaw === null ? film.c : film.wheelRaw) + deltaX / film.w;
+    film.wheelRaw = Math.max(film.downIdx - 1, Math.min(film.downIdx + 1, raw));
+    film.c = this._stackFilmRubberBand(film, film.wheelRaw);
+    this._layoutStackFilmstrip();
+
+    clearTimeout(film.wheelTimer);
+    film.wheelTimer = setTimeout(() => {
+      if (this._stackFilm !== film || film.settling) return;
+      const recent = film.wheelSamples.filter((s) => film.lastWheelT - s.t < 100);
+      const span = recent.length > 1 ? Math.max(16, recent[recent.length - 1].t - recent[0].t) : 16;
+      const vPx = recent.reduce((sum, s) => sum + s.d, 0) / span; // px per ms, + = towards later cards
+      const vC = vPx / film.w;
+      let target;
+      if (Math.abs(vPx) > 0.3) {
+        target = vC > 0 ? Math.floor(film.c + 0.02) + 1 : Math.ceil(film.c - 0.02) - 1;
+      } else {
+        target = Math.round(film.c);
+      }
+      target = Math.max(film.downIdx - 1, Math.min(film.downIdx + 1, target));
+      target = Math.max(0, Math.min(film.keys.length - 1, target));
+      this._settleStackFilmstrip(target, vC);
+    }, 90);
+  }
+
   centerActiveDatePill(smooth = true) {
     if (!this.els.stackDateStrip) return;
     const pillsTrack = this.els.stackDateStrip.querySelector('.stack-date-pills-track');
@@ -2399,6 +2662,7 @@ export class FableFlowApp {
 
   zoomOutStackToCalendar() {
     if (this._isZoomTransitioning) return;
+    if (this._stackFilm) this._finishStackFilmstrip();
     const stackEl = this.els.stackScreen;
     const calEl = this.els.calendarScreen;
     const centerPerspective =
@@ -2539,6 +2803,7 @@ export class FableFlowApp {
   }
 
   selectStackDate(dateKey, explicitDirection = null, initialOffsetPx = 0, options = {}) {
+    if (this._stackFilm) this._finishStackFilmstrip();
     if (dateKey === this.state.cardDateKey) {
       if (options && options.stayOnStack) return;
       this.sensory.playStackRiffleTick();
@@ -2848,19 +3113,34 @@ export class FableFlowApp {
       window.addEventListener('pointercancel', finishStripDrag);
     }
 
-    // 2. Smooth 1:1 Horizontal Swipe / Drag anywhere on #stack-carousel-stage (including #stack-card-3d)
+    // 2. Direct-manipulation filmstrip: the past cards follow the finger 1:1 (the neighbouring card,
+    //    with its content, slides in alongside), then settle with the finger's release velocity.
     if (this.els.stackCarouselStage) {
       let startX = null;
       let startY = null;
-      let lastX = 0;
-      let lastTime = 0;
-      let vx = 0;
+      let activePointerId = null;
       let isDraggingCarousel = false;
-      const centerPerspective = this.els.stackCarouselStage.querySelector(
-        '.stack-center-perspective'
-      );
+      let cAtDown = 0;
+      let samples = [];
 
       this.els.stackCarouselStage.addEventListener('pointerdown', (e) => {
+        // A card still gliding into place can be caught anywhere and dragged on from where it is
+        const film = this._stackFilm;
+        if (film && film.settling) {
+          cancelAnimationFrame(film.raf);
+          film.raf = null;
+          film.settling = false;
+          film.fromWheel = false;
+          const pt = this.getPointerXY(e);
+          startX = pt.x;
+          startY = pt.y;
+          activePointerId = e.pointerId;
+          isDraggingCarousel = true;
+          cAtDown = film.c;
+          film.downIdx = Math.round(film.c);
+          samples = [{ t: performance.now(), x: pt.x }];
+          return;
+        }
         if (
           e.target.closest('.stack-card-edit-btn') ||
           e.target.closest('.journal-photo-remove-btn') ||
@@ -2886,95 +3166,102 @@ export class FableFlowApp {
         const pt = this.getPointerXY(e);
         startX = pt.x;
         startY = pt.y;
-        lastX = pt.x;
-        lastTime = performance.now();
-        vx = 0;
+        activePointerId = e.pointerId;
         isDraggingCarousel = false;
+        samples = [{ t: performance.now(), x: pt.x }];
       });
 
       window.addEventListener(
         'pointermove',
         (e) => {
           if (startX === null || startY === null) return;
+          if (activePointerId !== null && e.pointerId !== activePointerId) return;
           const pt = this.getPointerXY(e);
           const dx = pt.x - startX;
           const dy = pt.y - startY;
+
+          if (!isDraggingCarousel) {
+            if (Math.abs(dx) > 7 && Math.abs(dx) > Math.abs(dy) * 1.1) {
+              const film = this._beginStackFilmstrip();
+              if (!film) {
+                startX = null;
+                startY = null;
+                return;
+              }
+              isDraggingCarousel = true;
+              cAtDown = film.c;
+              film.downIdx = Math.round(film.c);
+              // Swallow only the 7px touch slop, then the card follows the finger exactly
+              startX += Math.sign(dx) * 7;
+              startY = pt.y;
+              samples = [{ t: performance.now(), x: pt.x }];
+              const activeEl = document.activeElement;
+              if (
+                activeEl &&
+                activeEl.blur &&
+                activeEl.tagName !== 'TEXTAREA' &&
+                activeEl.tagName !== 'INPUT'
+              ) {
+                activeEl.blur();
+              }
+            } else {
+              return;
+            }
+          }
+
+          if (e.cancelable) e.preventDefault();
           const now = performance.now();
-          const dt = Math.max(1, now - lastTime);
-
-          if (!isDraggingCarousel && Math.abs(dx) > 7 && Math.abs(dx) > Math.abs(dy) * 1.1) {
-            isDraggingCarousel = true;
-            const activeEl = document.activeElement;
-            if (
-              activeEl &&
-              activeEl.blur &&
-              activeEl.tagName !== 'TEXTAREA' &&
-              activeEl.tagName !== 'INPUT'
-            ) {
-              activeEl.blur();
-            }
-          }
-
-          if (isDraggingCarousel && centerPerspective) {
-            if (e.cancelable) e.preventDefault();
-            vx = 0.7 * ((pt.x - lastX) / dt) + 0.3 * vx;
-            lastX = pt.x;
-            lastTime = now;
-            const offset = Math.max(-165, Math.min(165, dx * 0.78));
-            const scale = (1 - Math.min(0.05, Math.abs(dx) / 2600)).toFixed(3);
-            centerPerspective.style.transition = 'none';
-            centerPerspective.style.transform = `translate3d(${offset.toFixed(1)}px, 0, 0) scale(${scale})`;
-            if (this.els.stackPeekLeft) {
-              this.els.stackPeekLeft.style.transition = 'none';
-              this.els.stackPeekLeft.style.transform = `translateY(-50%) translateX(${Math.max(0, offset * 0.32).toFixed(1)}px)`;
-            }
-            if (this.els.stackPeekRight) {
-              this.els.stackPeekRight.style.transition = 'none';
-              this.els.stackPeekRight.style.transform = `translateY(-50%) translateX(${Math.min(0, offset * 0.32).toFixed(1)}px)`;
-            }
-          }
+          if (samples.length === 0 || samples[samples.length - 1].t !== now) samples.push({ t: now, x: pt.x });
+          while (samples.length > 2 && now - samples[0].t > 100) samples.shift();
+          const film = this._stackFilm;
+          if (!film) return;
+          // 1:1 — the card moves exactly as far as the finger (rubber band past the first/last card)
+          const dxNow = pt.x - startX;
+          film.c = this._stackFilmRubberBand(film, cAtDown - dxNow / film.w);
+          this._layoutStackFilmstrip();
         },
         { passive: false }
       );
 
       const endCarouselDrag = (e) => {
         if (startX === null || startY === null) return;
-        const pt = e && e.clientX !== undefined ? this.getPointerXY(e) : { x: lastX, y: startY };
-        const dx = pt.x - startX;
-        const dy = pt.y - startY;
-        const releaseOffset = Math.max(-165, Math.min(165, dx * 0.78));
+        if (e && activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) {
+          return;
+        }
+        const wasDragging = isDraggingCarousel;
         startX = null;
         startY = null;
-
-        if (centerPerspective) {
-          centerPerspective.style.transition = '';
-          centerPerspective.style.transform = '';
-        }
-        if (this.els.stackPeekLeft) {
-          this.els.stackPeekLeft.style.transition = '';
-          this.els.stackPeekLeft.style.transform = '';
-        }
-        if (this.els.stackPeekRight) {
-          this.els.stackPeekRight.style.transition = '';
-          this.els.stackPeekRight.style.transform = '';
-        }
-
-        if (!isDraggingCarousel) return;
+        activePointerId = null;
         isDraggingCarousel = false;
+        if (!wasDragging) return;
+
         this._justFinishedCardSwipe = true;
         clearTimeout(this._swipeGuardTimer);
         this._swipeGuardTimer = setTimeout(() => {
           this._justFinishedCardSwipe = false;
         }, 220);
 
-        const flicked = Math.abs(vx) > 0.25 && Math.abs(dx) >= 10;
-        if ((Math.abs(dx) >= 18 || flicked) && Math.abs(dx) > Math.abs(dy) * 1.05) {
-          if (dx > 0) {
-            this.stepStackCard(-1, releaseOffset);
-          } else {
-            this.stepStackCard(1, releaseOffset);
-          }
+        // Release velocity from the last ~100ms of movement (px per ms)
+        let vx = 0;
+        if (samples.length >= 2) {
+          const a = samples[0];
+          const b = samples[samples.length - 1];
+          const dt = b.t - a.t;
+          if (dt > 0 && performance.now() - b.t < 120) vx = (b.x - a.x) / dt;
         }
+        const film = this._stackFilm;
+        if (!film) return;
+        const vC = -vx / film.w; // cards per ms
+        let target;
+        if (Math.abs(vx) > 0.3) {
+          target = vC > 0 ? Math.floor(film.c + 0.02) + 1 : Math.ceil(film.c - 0.02) - 1;
+        } else {
+          target = Math.round(film.c);
+        }
+        // One card per flick, never past the first/last card
+        target = Math.max(film.downIdx - 1, Math.min(film.downIdx + 1, target));
+        target = Math.max(0, Math.min(film.keys.length - 1, target));
+        this._settleStackFilmstrip(target, vC);
       };
 
       window.addEventListener('pointerup', endCarouselDrag);
@@ -2992,11 +3279,17 @@ export class FableFlowApp {
             return;
           }
 
-          // Smooth wheel/trackpad scrolling through the chronological stack of cards
+          // Trackpad two-finger horizontal swipe: cards follow the fingers 1:1, then settle
+          if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && e.deltaMode === 0) {
+            e.preventDefault();
+            this._onStackFilmstripWheel(e.deltaX);
+            return;
+          }
+
+          // Mouse wheel (vertical): step through the chronological stack of cards
           const now = Date.now();
           if (now - this._lastStackWheelTime < 220) return;
-          const dominantDelta =
-            Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+          const dominantDelta = e.deltaY;
           if (Math.abs(dominantDelta) > 14) {
             e.preventDefault();
             this._lastStackWheelTime = now;
@@ -4609,7 +4902,7 @@ export class FableFlowApp {
       this.getOffsetDateKey(todayKey, -1);
     const curMeta = this.formatDateMetadataForKey(currentDateKey);
 
-    if (this.els.stackDateStrip) {
+    if (this.els.stackDateStrip && !this._stackFilm) {
       const stripKeys = this.getStackStripDateKeys();
       const stripSignature = stripKeys.join(',');
       let monthBtn = this.els.stackDateStrip.querySelector('.stack-month-label');
@@ -4665,8 +4958,10 @@ export class FableFlowApp {
       });
 
       if (!this._isDraggingDateStrip) {
+        const smoothStrip = Boolean(this._stackStripSmoothOnce);
+        this._stackStripSmoothOnce = false;
         requestAnimationFrame(() => {
-          this.centerActiveDatePill(false);
+          this.centerActiveDatePill(smoothStrip);
         });
       }
     }

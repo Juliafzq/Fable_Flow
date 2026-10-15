@@ -4,7 +4,7 @@
 #   ./run_qa.sh typing edit          ./run_qa.sh bars          ./run_qa.sh all
 # Groups:
 #   bars    bottom-bar slots, sizes, row alignment
-#   flip    flip buttons + swipe-to-flip (Today & past cards), stack edge scrolling, strikes kept after flip
+#   flip    flip buttons + swipe-to-flip (Today & past cards), stack edge scrolling (1:1 filmstrip), strikes kept after flip
 #   edit    tap-to-edit opens reliably, stray blur, × delete, no reflow when editing
 #   typing  Return -> next item, 8-item cap, shrink-to-fit, no size bounce while typing
 #   profile profile menu: Language dropdown (no auto-switch), persists, menu size stable
@@ -47,7 +47,8 @@ for g in $groups; do
     flip)   job "Flip: buttons, swipe, interrupted swipe" pass python3 flip2_test.py 390 844 PORT
             job "Past cards: swipe flips, edges scroll"  pass python3 stack_test.py PORT
             job "Strikethroughs survive flipping"         pass python3 strike_flip_test.py PORT
-            job "Flip only via button / empty space; stack edge scrolls" pass python3 gesture_rules_test.py PORT ;;
+            job "Flip only via button / empty space; stack edge scrolls" pass python3 gesture_rules_test.py PORT
+            job "Stack scroll follows finger 1:1, velocity-matched settle" pass python3 stack_film_test.py PORT ;;
     edit)   job "Tap item -> edit opens (12 taps)"       pass python3 tap_edit_test.py 390 844 PORT
             job "Stray blur ignored, real blur saves"    pass python3 blur_test.py PORT
             job "× deletes item"                         pass python3 del_test.py PORT

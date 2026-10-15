@@ -807,7 +807,8 @@ html.mobile-landscape-locked .app-viewport {
   touch-action: pan-y;
 }
 
-#stack-task-list-container .task-row {
+#stack-task-list-container .task-row,
+.stack-filmstrip-clone [data-clone-id="stack-task-list-container"] .task-row {
   grid-template-columns: 42px minmax(0, 1fr);
 }
 
@@ -2259,6 +2260,29 @@ html.mobile-landscape-locked .app-viewport {
   animation: stackBounceRightEdge 0.26s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
+/* Stack filmstrip: snapshot of the card the finger is dragging away (or towards) */
+.stack-filmstrip-clone {
+  position: absolute;
+  z-index: 4;
+  margin: 0;
+  perspective: 1400px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.stack-carousel-stage.is-filmstrip .stack-center-perspective {
+  will-change: transform;
+}
+
+/* Re-rendering a neighbour mid-drag must never play the flip rotation */
+.stack-carousel-stage.is-filmstrip .daily-card-3d {
+  transition: none !important;
+}
+
+.stack-carousel-stage.is-filmstrip .stack-peek-card {
+  opacity: 0 !important;
+}
+
 /* Outgoing cloned card during two-card stack scrolling */
 .stack-outgoing-card-clone {
   position: absolute !important;
@@ -3206,7 +3230,8 @@ html.lang-zh .about-block-lead {
 .task-row {
   grid-template-columns: calc(var(--task-fs, 24px) * 1.75) minmax(0, 1fr) calc(var(--task-fs, 24px) * 1.58);
 }
-#stack-task-list-container .task-row {
+#stack-task-list-container .task-row,
+.stack-filmstrip-clone [data-clone-id="stack-task-list-container"] .task-row {
   grid-template-columns: calc(var(--task-fs, 24px) * 1.75) minmax(0, 1fr);
 }
 .task-tomato-btn {
