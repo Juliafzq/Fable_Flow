@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v80';
-import { CardGestureMath } from './cardGestureMath.js?v=20261015_v80';
-import { SensoryEngine } from './sensoryEngine.js?v=20261015_v80';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v80';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v80';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v81';
+import { CardGestureMath } from './cardGestureMath.js?v=20261015_v81';
+import { SensoryEngine } from './sensoryEngine.js?v=20261015_v81';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v81';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v81';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261015_v80';
+} from './i18n.js?v=20261015_v81';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -52,9 +52,23 @@ export class FableFlowApp {
 
     this.supabaseSync = new SupabaseSyncService();
     this._authMode = 'signin'; // 'signin' | 'signup'
-    this.supabaseSync.onAuthStateChange = () => {
+    this.supabaseSync.onAuthStateChange = (user) => {
       this.syncFromAuthenticatedAccount(true);
+      // Back from Google sign-in (web redirect or the iPhone app's sign-in sheet)
+      if (!this.supabaseSync.passwordRecoveryPending) {
+        this.renderAuthModalState();
+        this.closeAuthModal();
+        if (user && user.email) {
+          this.showTelemetryToast(this.t('Signed in as {email}', { email: user.email }));
+        }
+      }
     };
+    this.supabaseSync.onAuthLinkError = (msg) => {
+      this.openAuthModal('signin');
+      this.showAuthError(this.t(msg));
+    };
+    // The iPhone app hands back the result of Google sign-in here
+    window.untoHandleAuthCallback = (fragment) => this.supabaseSync.handleAuthFragment(fragment);
     // Opened the emailed "reset password" link: ask for the new password
     this.supabaseSync.onPasswordRecovery = () => {
       this.openAuthModal();

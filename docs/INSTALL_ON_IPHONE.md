@@ -59,6 +59,13 @@ Tapping anywhere else on the widget opens the app on a fresh tomato.
 
 > **Mac Desktop Widget tip:** If you have macOS Sonoma (14.0+) or Sequoia (15.0+), you can also put this exact widget on your Mac desktop without building a Mac app! Go to Mac **System Settings → Desktop & Dock → enable "Use iPhone widgets"**, then right-click your Mac desktop and click **Edit Widgets...** to add it. See [INSTALL_ON_MAC.md](INSTALL_ON_MAC.md) for details.
 
+## Google sign-in in the app
+
+"Continue with Google" opens Apple's secure sign-in sheet (the same one other apps use), because Google
+doesn't allow sign-in inside an app's built-in browser. After you pick your Google account, the sheet closes
+and you're signed in. If the button asks you to update the app, open the project in Xcode and press **▶ Run**
+once to install the newest build.
+
 ## The 7-day limit (free Apple ID)
 
 Apps signed with a free Personal Team **stop opening after 7 days**. Your data is kept. To renew:

@@ -146,6 +146,7 @@ const ZH = {
   'Incorrect password': '密码不对，请再试一次',
   'Wrong email or password': '邮箱或密码不对',
   'Contact': '联系我们',
+  'Update the iPhone app (press Run in Xcode) to use Google sign-in.': '请先更新 iPhone App（在 Xcode 里点运行），才能用 Google 登录。',
   "Can't reach the sync server. Check your internet connection, or try another Wi-Fi or mobile data.": '连不上同步服务器。请检查网络，或换个 Wi-Fi / 用手机流量再试。',
   'No account found under this email.': '这个邮箱下没有账号。',
   'Wrong password. Try again, or tap "Forgot password?"': '密码不对。请再试一次，或点“忘记密码？”',

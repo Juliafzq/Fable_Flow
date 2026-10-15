@@ -3,6 +3,7 @@ import WebKit
 import UserNotifications
 import UIKit
 import WidgetKit
+import AuthenticationServices
 
 /// Full-screen native iOS wrapper for UNTO / FLOW.
 /// Bridges the web app's tomato timers directly to iOS `UNUserNotificationCenter`
@@ -42,6 +43,7 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
         // Expose a flag at document start so js/app.js knows native iOS notifications & haptics are active.
         let bootstrapJS = """
         window.__UNTO_NATIVE_IOS__ = true;
+        window.__UNTO_NATIVE_OAUTH__ = true;
         """
         let script = WKUserScript(
             source: bootstrapJS,
@@ -79,7 +81,8 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, UNUserNotificationCenterDelegate {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, UNUserNotificationCenterDelegate,
+        ASWebAuthenticationPresentationContextProviding {
         weak var webView: WKWebView?
         private static let idPrefix = "com.untoflow.timer.slot."
         private var pageLoaded = false
@@ -339,9 +342,63 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
             case "widgetSync":
                 handleWidgetSync(body)
 
+            case "oauthSignIn":
+                startOAuthSignIn(body)
+
             default:
                 break
             }
+        }
+
+        // MARK: Google sign-in
+
+        /// Kept alive while Apple's sign-in sheet is open.
+        private var authSession: ASWebAuthenticationSession?
+
+        /// Google blocks sign-in inside an app's embedded web view, so sign-in runs in Apple's secure
+        /// sign-in sheet. Supabase finishes by redirecting to untoflow://auth-callback#access_token=...,
+        /// which the sheet captures and we hand back to the web app.
+        private func startOAuthSignIn(_ body: [String: Any]) {
+            guard authSession == nil,
+                  let raw = body["url"] as? String,
+                  let url = URL(string: raw),
+                  url.scheme == "https" else { return }
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "untoflow") { [weak self] callbackURL, error in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.authSession = nil
+                    var fragment = "error=failed"
+                    if let callbackURL = callbackURL {
+                        if let hash = callbackURL.fragment, !hash.isEmpty {
+                            fragment = hash
+                        } else if let query = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.query, !query.isEmpty {
+                            fragment = query
+                        }
+                    } else if let authError = error as? ASWebAuthenticationSessionError, authError.code == .canceledLogin {
+                        fragment = "error=cancelled"
+                    }
+                    self.deliverAuthFragment(fragment)
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            authSession = session
+            if !session.start() {
+                authSession = nil
+                deliverAuthFragment("error=failed")
+            }
+        }
+
+        private func deliverAuthFragment(_ fragment: String) {
+            guard let data = try? JSONSerialization.data(withJSONObject: [fragment]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            runWhenLoaded("window.untoHandleAuthCallback && window.untoHandleAuthCallback(\(json)[0]);")
+        }
+
+        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            if let window = webView?.window { return window }
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            return scenes.compactMap { $0.keyWindow }.first ?? ASPresentationAnchor()
         }
 
         private func scheduleLocalTimerNotification(

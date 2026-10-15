@@ -191,32 +191,45 @@ export class SupabaseSyncService {
     return Boolean(this.getCurrentUser());
   }
 
+  /** Sign-in links (Google, password reset) come back with tokens or an error in the URL #fragment. */
   _checkOAuthRedirectHash() {
     try {
       if (typeof window === 'undefined' || !window.location.hash) return;
       const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      if (params.get('error') || params.get('error_code')) {
-        // e.g. an old or already-used password reset link
-        const code = params.get('error_code') || '';
-        this.pendingAuthLinkError =
-          code === 'otp_expired'
-            ? 'This reset link has expired or was already used. Request a new one.'
-            : params.get('error_description') || 'That link didn\'t work. Request a new one.';
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-        return;
-      }
-      if (!hash.includes('access_token=')) return;
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const linkType = params.get('type') || '';
-      const expiresIn = Number(params.get('expires_in')) || 3600;
-      if (accessToken && this.isCloudConfigured()) {
-        if (linkType === 'recovery') this.passwordRecoveryPending = true;
-        this._linkSessionReady = this._fetchSupabaseUserFromToken(accessToken, refreshToken, linkType, expiresIn);
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-      }
+      if (!/access_token=|error=|error_code=/.test(hash)) return;
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      this.handleAuthFragment(hash);
     } catch (_) {}
+  }
+
+  /**
+   * Handles a returned auth fragment, either from this page's URL or handed over by the iPhone
+   * app after Google sign-in in the system sign-in sheet. Returns 'signed-in' | 'error' | 'cancelled' | 'ignored'.
+   */
+  handleAuthFragment(fragment) {
+    const params = new URLSearchParams(String(fragment || '').replace(/^#/, ''));
+    if (params.get('error') === 'cancelled') return 'cancelled';
+    if (params.get('error') || params.get('error_code')) {
+      const code = params.get('error_code') || '';
+      const msg =
+        code === 'otp_expired'
+          ? 'This reset link has expired or was already used. Request a new one.'
+          : params.get('error_description') || 'Sign-in failed';
+      this.pendingAuthLinkError = msg;
+      if (typeof this.onAuthLinkError === 'function') {
+        this.pendingAuthLinkError = null;
+        this.onAuthLinkError(msg);
+      }
+      return 'error';
+    }
+    const accessToken = params.get('access_token');
+    if (!accessToken || !this.isCloudConfigured()) return 'ignored';
+    const refreshToken = params.get('refresh_token');
+    const linkType = params.get('type') || '';
+    const expiresIn = Number(params.get('expires_in')) || 3600;
+    if (linkType === 'recovery') this.passwordRecoveryPending = true;
+    this._linkSessionReady = this._fetchSupabaseUserFromToken(accessToken, refreshToken, linkType, expiresIn);
+    return 'signed-in';
   }
 
   async _fetchSupabaseUserFromToken(accessToken, refreshToken, linkType = '', expiresIn = 3600) {
@@ -569,6 +582,20 @@ export class SupabaseSyncService {
     if (this.isCloudConfigured()) {
       const oauthEnabled = await this._isExternalOAuthEnabled(cleanProvider);
       if (oauthEnabled) {
+        const handler =
+          window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.untoNative;
+        if (window.__UNTO_NATIVE_IOS__ && handler) {
+          // iPhone app: Google refuses sign-in inside an app's embedded browser, so the app opens
+          // Apple's secure sign-in sheet and hands the result back through untoflow://auth-callback.
+          if (!window.__UNTO_NATIVE_OAUTH__) {
+            throw new Error('Update the iPhone app (press Run in Xcode) to use Google sign-in.');
+          }
+          const authUrl = `${this.config.url}/auth/v1/authorize?provider=${cleanProvider}&redirect_to=${encodeURIComponent(
+            'untoflow://auth-callback'
+          )}`;
+          handler.postMessage({ action: 'oauthSignIn', url: authUrl });
+          return { redirecting: true };
+        }
         const redirectTo = encodeURIComponent(window.location.origin + window.location.pathname);
         window.location.href = `${this.config.url}/auth/v1/authorize?provider=${cleanProvider}&redirect_to=${redirectTo}`;
         return { redirecting: true };
