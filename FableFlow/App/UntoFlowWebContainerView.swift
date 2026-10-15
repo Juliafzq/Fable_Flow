@@ -289,11 +289,9 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
 
         func requestNotificationPermission() {
             let center = UNUserNotificationCenter.current()
-            if #available(iOS 15.0, *) {
-                center.requestAuthorization(options: [.alert, .sound, .timeSensitive]) { _, _ in }
-            } else {
-                center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
-            }
+            // Time-sensitive delivery comes from each alert's `interruptionLevel`; the old
+            // `.timeSensitive` permission option is deprecated (and flagged on Mac Catalyst).
+            center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
