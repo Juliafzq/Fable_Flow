@@ -262,8 +262,9 @@ private struct MediumView: View {
     }
 }
 
-// MARK: - Lock Screen
+// MARK: - Lock Screen (iPhone only; Macs don't have Lock Screen widgets)
 
+#if !targetEnvironment(macCatalyst) && !os(macOS)
 private struct CircularView: View {
     let entry: FlowEntry
 
@@ -310,6 +311,7 @@ private struct RectangularView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+#endif
 
 // MARK: - Widget
 
@@ -319,10 +321,12 @@ struct UntoFlowWidgetView: View {
 
     var body: some View {
         switch family {
+        #if !targetEnvironment(macCatalyst) && !os(macOS)
         case .accessoryCircular:
             CircularView(entry: entry)
         case .accessoryRectangular:
             RectangularView(entry: entry)
+        #endif
         case .systemMedium:
             MediumView(entry: entry)
         default:
@@ -344,7 +348,15 @@ struct UntoFlowWidget: Widget {
         }
         .configurationDisplayName("UNTO / FLOW")
         .description("Set and start a tomato, and cross off today's tasks.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
+        .supportedFamilies(Self.families)
+    }
+
+    private static var families: [WidgetFamily] {
+        #if targetEnvironment(macCatalyst) || os(macOS)
+        return [.systemSmall, .systemMedium]
+        #else
+        return [.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular]
+        #endif
     }
 }
 
