@@ -3404,6 +3404,37 @@ html.lang-zh .about-block-lead {
   height: 36px;
 }
 
+/* Dropdown rows: show the chosen value as plain text flush right (a native <select> is as wide as
+   its longest option, which left a gap after short values like "English" or "No"); the real select
+   sits invisibly on top so tapping still opens the system picker. */
+.profile-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 36px;
+}
+.profile-select-display {
+  font-size: 18px;
+  font-weight: 600;
+  color: #5E5D59;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.profile-select-wrap .profile-reset-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  opacity: 0;
+}
+.profile-select-wrap:focus-within .profile-select-display {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Tutorial card */
 .tour-action-title { font-size: 20px; }
 .tour-action-desc { font-size: 17px; line-height: 1.35; }

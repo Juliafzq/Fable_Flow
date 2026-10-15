@@ -10,14 +10,14 @@
   <meta name="apple-mobile-web-app-title" content="UNTO / FLOW" />
   <meta name="application-name" content="UNTO / FLOW" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261015_v81" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261015_v81" />
-  <link rel="manifest" href="manifest.json?v=20261015_v81" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261015_v82" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261015_v82" />
+  <link rel="manifest" href="manifest.json?v=20261015_v82" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261015_v81" />
-  <link rel="stylesheet" href="css/noto-serif-sc.css?v=20261015_v81" />
+  <link rel="stylesheet" href="css/style.css?v=20261015_v82" />
+  <link rel="stylesheet" href="css/noto-serif-sc.css?v=20261015_v82" />
   <link rel="preload" href="assets/fonts/eb-garamond-latin.woff2" as="font" type="font/woff2" crossorigin />
   <!-- Start downloading the main hero tomatoes immediately, so the tutorial tomato is ready on slow phones -->
   <link rel="preload" as="image" href="assets/tomatoes/hero-tomato-0.png?v=20261010_v26" />
@@ -420,7 +420,7 @@
       <div class="profile-popover-card">
         <button type="button" id="profile-account-btn" class="profile-menu-row">
           <span>Account</span>
-          <span id="profile-account-state-label" class="profile-menu-val">Sign In ↗</span>
+          <span id="profile-account-state-label" class="profile-menu-val">Sign In</span>
         </button>
         <button type="button" id="profile-open-home-btn" class="profile-menu-row">
           <span>Home</span>
@@ -430,9 +430,13 @@
           <span>About &amp; Tour</span>
           <span class="profile-menu-val">↗</span>
         </button>
+        <a id="profile-contact-link" class="profile-menu-row profile-menu-link" href="mailto:flow@untoworld.com?subject=UNTO%20%2F%20FLOW">
+          <span>Contact</span>
+          <span class="profile-menu-val">↗</span>
+        </a>
         <label class="profile-menu-row" for="profile-reset-time-select">
           <span>Daily Reset</span>
-          <select id="profile-reset-time-select" class="profile-reset-select" aria-label="Daily reset time">
+          <span class="profile-select-wrap"><span class="profile-select-display" aria-hidden="true"></span><select id="profile-reset-time-select" class="profile-reset-select" aria-label="Daily reset time">
             <option value="0">00:00</option>
             <option value="1">01:00</option>
             <option value="2">02:00</option>
@@ -457,14 +461,14 @@
             <option value="21">21:00</option>
             <option value="22">22:00</option>
             <option value="23">23:00</option>
-          </select>
+          </select></span>
         </label>
         <label class="profile-menu-row" for="profile-tomato-reset-select">
           <span>Tomato Reset</span>
-          <select id="profile-tomato-reset-select" class="profile-reset-select" aria-label="Reset tomatoes daily with the card">
+          <span class="profile-select-wrap"><span class="profile-select-display" aria-hidden="true"></span><select id="profile-tomato-reset-select" class="profile-reset-select" aria-label="Reset tomatoes daily with the card">
             <option value="no" selected>No</option>
             <option value="yes">Yes</option>
-          </select>
+          </select></span>
         </label>
         <button type="button" id="profile-toggle-audio-btn" class="profile-menu-row">
           <span>Sound</span>
@@ -472,15 +476,11 @@
         </button>
         <label class="profile-menu-row" for="profile-language-select">
           <span>Language</span>
-          <select id="profile-language-select" class="profile-reset-select" aria-label="Language">
+          <span class="profile-select-wrap"><span class="profile-select-display" aria-hidden="true"></span><select id="profile-language-select" class="profile-reset-select" aria-label="Language">
             <option value="en">English</option>
             <option value="zh">简体中文</option>
-          </select>
+          </select></span>
         </label>
-        <a id="profile-contact-link" class="profile-menu-row profile-menu-link" href="mailto:flow@untoworld.com?subject=UNTO%20%2F%20FLOW">
-          <span>Contact</span>
-          <span class="profile-menu-val">↗</span>
-        </a>
       </div>
     </div>
 
@@ -640,6 +640,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261015_v81"></script>
+  <script type="module" src="js/app.js?v=20261015_v82"></script>
 </body>
 </html>

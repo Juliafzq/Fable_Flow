@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v81';
-import { CardGestureMath } from './cardGestureMath.js?v=20261015_v81';
-import { SensoryEngine } from './sensoryEngine.js?v=20261015_v81';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v81';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v81';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v82';
+import { CardGestureMath } from './cardGestureMath.js?v=20261015_v82';
+import { SensoryEngine } from './sensoryEngine.js?v=20261015_v82';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v82';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v82';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261015_v81';
+} from './i18n.js?v=20261015_v82';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -253,6 +253,7 @@ export class FableFlowApp {
       localStorage.setItem('fable_flow_language', safe);
     } catch (_) {}
     applyStaticI18n();
+    this.syncProfileSelectDisplays();
     if (this.els.profileLanguageSelect) {
       this.els.profileLanguageSelect.value = safe;
     }
@@ -907,6 +908,9 @@ export class FableFlowApp {
         this.openAboutModal();
       });
     }
+    document.querySelectorAll('.profile-select-wrap select').forEach((sel) => {
+      sel.addEventListener('change', () => this.syncProfileSelectDisplays());
+    });
     if (this.els.profileResetTimeSelect) {
       this.els.profileResetTimeSelect.addEventListener('change', (e) => {
         const hourVal = Math.max(0, Math.min(23, parseInt(e.target.value, 10) || 0));
@@ -1278,6 +1282,10 @@ export class FableFlowApp {
     if (this.els.profileTomatoResetSelect) {
       this.els.profileTomatoResetSelect.value = this.state.dailyTomatoReset ? 'yes' : 'no';
     }
+    if (this.els.profileLanguageSelect) {
+      this.els.profileLanguageSelect.value = getLanguage();
+    }
+    this.syncProfileSelectDisplays();
     this.els.profileModalOverlay.classList.remove('hidden');
   }
 
@@ -1286,10 +1294,21 @@ export class FableFlowApp {
     const user = this.supabaseSync ? this.supabaseSync.getCurrentUser() : null;
     if (user && user.email) {
       const shortHandle = user.email.split('@')[0].slice(0, 12);
-      this.els.profileAccountStateLabel.textContent = `${shortHandle} ✓`;
+      this.els.profileAccountStateLabel.textContent = shortHandle;
     } else {
-      this.els.profileAccountStateLabel.textContent = this.t('Sign In ↗');
+      this.els.profileAccountStateLabel.textContent = this.t('Sign In');
     }
+  }
+
+  /** Copies each profile dropdown's chosen option into the visible right-aligned text. */
+  syncProfileSelectDisplays() {
+    document.querySelectorAll('.profile-select-wrap').forEach((wrap) => {
+      const select = wrap.querySelector('select');
+      const display = wrap.querySelector('.profile-select-display');
+      if (!select || !display) return;
+      const opt = select.options[select.selectedIndex];
+      display.textContent = opt ? opt.textContent : '';
+    });
   }
 
   bindAuthModalEvents() {
@@ -1665,6 +1684,7 @@ export class FableFlowApp {
       this.state = cloudState;
       setLanguage(cloudState.language);
       applyStaticI18n();
+      this.syncProfileSelectDisplays();
       if (this.els.profileLanguageSelect) {
         this.els.profileLanguageSelect.value = cloudState.language;
       }
