@@ -43,18 +43,18 @@ No paid Apple Developer Program needed. It's for personal testing before publish
 8. When the app asks to **send notifications, tap Allow**. That's what makes the bell ring when the app is closed.
 
 ### Add the widget
-Long-press the Home Screen → **Edit → Add Widget** → search **UNTO / FLOW** → pick a size.
+Long-press the Home Screen → **Edit → Add Widget** → search **UNTO / FLOW**.
 For the Lock Screen: long-press the Lock Screen → **Customize → Lock Screen → widgets row**.
 
-| Size | What it does |
+There are two widgets:
+
+| Widget | What it does |
 |---|---|
-| **Small** | A tomato with a countdown. **− / +** sets the length (5-minute steps, 5 to 180 min). Tap the tomato to start, again to pause; **■** stops. The bell rings at 00:00. |
-| **Medium** | Same tomato with big countdown digits, plus today's to-do list from the front of your card. Tap a task to cross it out (tap again to undo). The app picks up the change next time it's open. |
-| **Lock Screen** | Shows the live countdown while a tomato runs. |
+| **Tomato** (small) | A big tomato with the time on it. **− / +** set the length in 5-minute steps (5 to 180 min); while it runs they take off or add 5 minutes. **▶ / ❚❚** starts and pauses. While paused, **↺** (top-right) resets it. The bell rings at 00:00. Tapping anywhere else opens the Timer page on a new tomato (or the 6th tomato, with "Maximum 6 active tomatoes reached", if all 6 are in use). |
+| **Today's Card** (wide) | Today's to-do list: unfinished tasks first, then finished ones in grey. Says "No uncompleted tasks" when everything is done. Tap a task to cross it out (tap again to undo). Tapping anywhere else opens the Card page. |
+| **Lock Screen** (iPhone) | Shows the live countdown while a tomato runs. |
 
-Tapping anywhere else on the widget opens the app on a fresh tomato.
-
-> The widget's timer runs inside the widget, separate from the four tomatoes in the app.
+> The widget's timer runs inside the widget, separate from the six tomatoes in the app.
 > The to-do list appears after you open the app once (it hands today's tasks to the widget).
 
 > **Mac Desktop Widget tip:** If you have macOS Sonoma (14.0+) or Sequoia (15.0+), you can also put this exact widget on your Mac desktop without building a Mac app! Go to Mac **System Settings → Desktop & Dock → enable "Use iPhone widgets"**, then right-click your Mac desktop and click **Edit Widgets...** to add it. See [INSTALL_ON_MAC.md](INSTALL_ON_MAC.md) for details.

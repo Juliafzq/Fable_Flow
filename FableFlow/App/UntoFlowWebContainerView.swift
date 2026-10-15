@@ -17,17 +17,34 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
     /// The single live coordinator (one window), used to forward widget deep links into the page.
     private static weak var activeCoordinator: Coordinator?
 
+    /// A widget tap that arrived before the web view existed (cold launch).
+    private static var pendingDeepLinkScript: String?
+
     func makeCoordinator() -> Coordinator {
         let coordinator = Coordinator()
         Self.activeCoordinator = coordinator
+        if let script = Self.pendingDeepLinkScript {
+            Self.pendingDeepLinkScript = nil
+            coordinator.runWhenLoaded(script)
+        }
         return coordinator
     }
 
-    /// `untoflow://timer` (from the widget) opens the hero tomato page on a free tomato.
+    /// Widget taps:
+    /// - `untoflow://timer` (Tomato widget) opens the Timer page on a new hero tomato.
+    /// - `untoflow://card` (Today's Card widget) opens the front of today's card.
     static func handleDeepLink(_ url: URL) {
         guard url.scheme == "untoflow" else { return }
-        if url.host == "timer" {
-            activeCoordinator?.runWhenLoaded(Coordinator.openTimerJS)
+        let script: String
+        switch url.host {
+        case "timer": script = Coordinator.openTimerJS
+        case "card": script = Coordinator.openCardJS
+        default: return
+        }
+        if let coordinator = activeCoordinator {
+            coordinator.runWhenLoaded(script)
+        } else {
+            pendingDeepLinkScript = script
         }
     }
 
@@ -89,16 +106,41 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
         private var pendingScripts: [String] = []
         private var askedForNotifications = false
 
-        /// Same as tapping the tomato on the app's home page (skipped during the first-time tour).
+        /// Opens the hero tomato page on a new (unused) tomato. When all 6 tomatoes are in use, opens the
+        /// last one and says the limit was reached. Skipped during the first-time tour.
         static let openTimerJS = """
         (function () {
           var a = window.fableFlowApp;
-          if (!a || !a.state.hasCompletedOnboarding) return false;
-          var free = a.state.timers.find(function (t) { return !t.assignedTaskId && !t.customTitle && t.runState === 'idle' && t.remainingSeconds === 0; })
-            || a.state.timers.find(function (t) { return !t.assignedTaskId && !t.customTitle; });
-          if (free) a.state.selectedQuadrant = free.quadrant;
+          if (!a || !a.state || !a.state.hasCompletedOnboarding) return false;
+          var timers = a.state.timers || [];
+          var free = timers.find(function (t) {
+            return !t.assignedTaskId && !t.customTitle && t.runState === 'idle' && !t.remainingSeconds;
+          });
+          var last = timers[timers.length - 1];
+          if (free) {
+            a.state.selectedQuadrant = free.quadrant;
+          } else if (last) {
+            a.state.selectedQuadrant = last.quadrant;
+          }
           a.state.activePillar = 'timer';
           a.state.timerSubMode = 'hero';
+          a.saveState();
+          a.renderAll();
+          if (!free && typeof a.showNotificationBanner === 'function') {
+            a.showNotificationBanner(a.t('Maximum 6 active tomatoes reached.'));
+          }
+          return true;
+        })();
+        """
+
+        /// Opens the front of today's card (same as tapping the card on the app's home page).
+        static let openCardJS = """
+        (function () {
+          var a = window.fableFlowApp;
+          if (!a || !a.state || !a.state.hasCompletedOnboarding) return false;
+          a.state.activePillar = 'card';
+          a.state.isCardFlipped = false;
+          a._todayFlipDeg = 0;
           a.saveState();
           a.renderAll();
           return true;

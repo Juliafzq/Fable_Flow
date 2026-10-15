@@ -1,12 +1,13 @@
 import WidgetKit
 import SwiftUI
 
-/// Home Screen, Mac desktop and Lock Screen widgets for UNTO / FLOW.
+/// Widgets for UNTO / FLOW.
 ///
-/// - Small: a tomato you can set (− / +), start, pause and stop, with a live countdown.
-/// - Medium: the same tomato with big countdown digits, plus today's to-do list from the front of the
-///   card. Tap a task to cross it out (the app picks the change up next time it's open).
-/// - Lock Screen: live countdown while a tomato runs.
+/// - **Tomato** (small; plus Lock Screen sizes on iPhone): a big tomato with the time on it and
+///   − / ▶❚❚ / + underneath. Tapping anywhere else opens the app's Timer page on a new hero tomato.
+/// - **Today's Card** (wide): today's to-do list, unfinished tasks first, then finished ones in grey.
+///   Tap a task to cross it out (the app picks the change up next time it's open). Tapping anywhere
+///   else opens the app's Card page.
 ///
 /// The timer runs inside the widget itself. Today's tasks come from the app through
 /// `WidgetSharedStore` (a shared Keychain item, since a free Apple ID can't sign App Groups).
@@ -14,7 +15,11 @@ import SwiftUI
 private let studioBackground = Color(red: 231.0 / 255.0, green: 232.0 / 255.0, blue: 226.0 / 255.0)
 private let ink = Color(red: 15.0 / 255.0, green: 15.0 / 255.0, blue: 15.0 / 255.0)
 private let openTimerURL = URL(string: "untoflow://timer")!
-private let maxMediumTasks = 5
+private let openCardURL = URL(string: "untoflow://card")!
+/// Rows that fit in the wide widget (the last one becomes "+N more" when there are extra tasks).
+private let maxCardRows = 5
+/// The tomato picture is 350 × 300.
+private let tomatoAspect: CGFloat = 300.0 / 350.0
 
 // MARK: - Timeline
 
@@ -22,6 +27,8 @@ struct FlowEntry: TimelineEntry {
     let date: Date
     let timer: WidgetTimerState
     let card: WidgetCardSnapshot
+    /// False until the app has handed today's card to the widget at least once.
+    let hasCard: Bool
 
     var phase: WidgetTimerState.Phase { timer.phase(at: date) }
 }
@@ -32,10 +39,11 @@ struct FlowProvider: TimelineProvider {
             date: Date(),
             timer: WidgetTimerState(),
             card: WidgetCardSnapshot(tasks: [
-                WidgetCardTask(id: "1", title: "Math study", isCompleted: true),
-                WidgetCardTask(id: "2", title: "Build deck", isCompleted: false),
-                WidgetCardTask(id: "3", title: "Pick up package", isCompleted: false),
-            ])
+                WidgetCardTask(id: "1", title: "Build deck", isCompleted: false),
+                WidgetCardTask(id: "2", title: "Pick up package", isCompleted: false),
+                WidgetCardTask(id: "3", title: "Math study", isCompleted: true),
+            ]),
+            hasCard: true
         )
     }
 
@@ -49,7 +57,7 @@ struct FlowProvider: TimelineProvider {
         var entries = [entry]
         // When a running tomato reaches 00:00, flip the widget back to its set length.
         if case .running(let endDate) = entry.phase {
-            entries.append(FlowEntry(date: endDate, timer: entry.timer, card: entry.card))
+            entries.append(FlowEntry(date: endDate, timer: entry.timer, card: entry.card, hasCard: entry.hasCard))
         }
         // Refresh just after midnight so the date stays current.
         let calendar = Calendar.current
@@ -59,15 +67,17 @@ struct FlowProvider: TimelineProvider {
     }
 
     private func currentEntry(at date: Date) -> FlowEntry {
-        FlowEntry(
+        let card = WidgetSharedStore.loadCard()
+        return FlowEntry(
             date: date,
             timer: WidgetTimerStore.load(),
-            card: WidgetSharedStore.loadCard() ?? WidgetCardSnapshot()
+            card: card ?? WidgetCardSnapshot(),
+            hasCard: card != nil
         )
     }
 }
 
-// MARK: - Shared pieces
+// MARK: - Timer pieces
 
 private func clockText(seconds: TimeInterval) -> String {
     let total = max(0, Int(seconds.rounded(.up)))
@@ -96,95 +106,109 @@ private struct CountdownText: View {
     }
 }
 
-/// The tomato itself is the start / pause button.
-private struct TomatoButton: View {
-    let entry: FlowEntry
-    let size: CGFloat
-
-    private var badgeSymbol: String {
-        if case .running = entry.phase { return "pause.fill" }
-        return "play.fill"
-    }
-
-    var body: some View {
-        Button(intent: StartPauseTimerIntent()) {
-            Image("Tomato")
-                .resizable()
-                .scaledToFit()
-                .frame(width: size, height: size)
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: badgeSymbol)
-                        .font(.system(size: size * 0.16, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: size * 0.34, height: size * 0.34)
-                        .background(Circle().fill(ink))
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 private struct RoundControl: View {
     let symbol: String
+    var size: CGFloat = 28
+    var filled = false
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(ink)
-            .frame(width: 28, height: 28)
-            .background(Circle().fill(ink.opacity(0.08)))
+            .font(.system(size: size * 0.42, weight: .bold))
+            .foregroundStyle(filled ? Color.white : ink)
+            .frame(width: size, height: size)
+            .background(Circle().fill(filled ? ink : ink.opacity(0.08)))
     }
 }
 
-/// − / + while idle; ■ stop while running or paused.
-private struct TimerControls: View {
+// MARK: - Small: tomato timer
+
+private struct TomatoTimerView: View {
     let entry: FlowEntry
 
+    private var isRunning: Bool {
+        if case .running = entry.phase { return true }
+        return false
+    }
+
+    private var isPaused: Bool {
+        if case .paused = entry.phase { return true }
+        return false
+    }
+
     var body: some View {
-        if entry.phase == .idle {
-            HStack(spacing: 8) {
-                Button(intent: AdjustTimerIntent(deltaMinutes: -WidgetTimerState.minuteStep)) {
-                    RoundControl(symbol: "minus")
+        GeometryReader { geo in
+            let controlsHeight: CGFloat = 38
+            let tomatoHeight = min(geo.size.height - controlsHeight + 6, (geo.size.width - 6) * tomatoAspect)
+            let tomatoWidth = tomatoHeight / tomatoAspect
+
+            ZStack(alignment: .bottom) {
+                // Big tomato with the time on its body (nudged down, away from the leaves).
+                ZStack {
+                    Image("Tomato")
+                        .resizable()
+                        .scaledToFit()
+                    CountdownText(entry: entry)
+                        .font(.system(size: tomatoWidth * 0.17, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .frame(width: tomatoWidth * 0.6)
+                        .offset(y: tomatoHeight * 0.09)
                 }
-                .buttonStyle(.plain)
-                Button(intent: AdjustTimerIntent(deltaMinutes: WidgetTimerState.minuteStep)) {
-                    RoundControl(symbol: "plus")
+                .frame(width: tomatoWidth, height: tomatoHeight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                // − / start-pause / +
+                HStack(spacing: 18) {
+                    Button(intent: AdjustTimerIntent(deltaMinutes: -WidgetTimerState.minuteStep)) {
+                        RoundControl(symbol: "minus")
+                    }
+                    .buttonStyle(.plain)
+                    Button(intent: StartPauseTimerIntent()) {
+                        RoundControl(symbol: isRunning ? "pause.fill" : "play.fill", size: 32, filled: true)
+                    }
+                    .buttonStyle(.plain)
+                    Button(intent: AdjustTimerIntent(deltaMinutes: WidgetTimerState.minuteStep)) {
+                        RoundControl(symbol: "plus")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.bottom, 6)
             }
-        } else {
-            Button(intent: StopTimerIntent()) {
-                RoundControl(symbol: "stop.fill")
+            .overlay(alignment: .topTrailing) {
+                // Reset only appears while paused.
+                if isPaused {
+                    Button(intent: StopTimerIntent()) {
+                        RoundControl(symbol: "arrow.counterclockwise", size: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(6)
+                }
             }
-            .buttonStyle(.plain)
         }
     }
 }
 
-// MARK: - Small
+// MARK: - Wide: today's card
 
-private struct SmallTimerView: View {
-    let entry: FlowEntry
+private enum CardRow: Identifiable {
+    case task(WidgetCardTask)
+    case message(String)
+    case more(Int)
 
-    var body: some View {
-        VStack(spacing: 6) {
-            CountdownText(entry: entry)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(ink)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            TomatoButton(entry: entry, size: 62)
-            TimerControls(entry: entry)
+    var id: String {
+        switch self {
+        case .task(let task): return "task-" + task.id
+        case .message(let text): return "message-" + text
+        case .more(let count): return "more-\(count)"
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Medium
-
-private struct TaskListView: View {
+private struct CardListView: View {
     let entry: FlowEntry
 
     private var dateText: String {
@@ -194,70 +218,68 @@ private struct TaskListView: View {
         return formatter.string(from: entry.date).uppercased()
     }
 
-    var body: some View {
+    /// Unfinished first, then finished; "No uncompleted tasks" when everything is done.
+    private var rows: [CardRow] {
+        guard entry.hasCard else { return [.message("Open the app to load today's card.")] }
         let tasks = entry.card.tasks
-        VStack(alignment: .leading, spacing: 4) {
+        guard !tasks.isEmpty else { return [.message("No tasks on today's card.")] }
+        let open = tasks.filter { !$0.isCompleted }
+        let done = tasks.filter { $0.isCompleted }
+        var all: [CardRow] = open.isEmpty ? [.message("No uncompleted tasks")] : []
+        all += open.map { CardRow.task($0) }
+        all += done.map { CardRow.task($0) }
+        if all.count > maxCardRows {
+            let shown = Array(all.prefix(maxCardRows - 1))
+            return shown + [.more(all.count - shown.count)]
+        }
+        return all
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
             Text(dateText)
-                .font(.system(size: 10, weight: .semibold, design: .serif))
+                .font(.system(size: 11, weight: .semibold, design: .serif))
+                .tracking(0.8)
                 .foregroundStyle(ink.opacity(0.55))
-            if tasks.isEmpty {
-                Text("Open the app to load today's card.")
-                    .font(.system(size: 12, design: .serif))
-                    .foregroundStyle(ink.opacity(0.55))
-            } else {
-                ForEach(Array(tasks.prefix(maxMediumTasks).enumerated()), id: \.element.id) { index, task in
-                    Button(intent: ToggleCardTaskIntent(taskID: task.id)) {
-                        HStack(spacing: 6) {
-                            Text(String(format: "%02d", index + 1))
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(ink.opacity(0.4))
-                            Text(task.title)
-                                .font(.system(size: 13, design: .serif))
-                                .strikethrough(task.isCompleted, color: ink.opacity(0.7))
-                                .foregroundStyle(task.isCompleted ? ink.opacity(0.4) : ink)
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                if tasks.count > maxMediumTasks {
-                    Text("+\(tasks.count - maxMediumTasks) more")
-                        .font(.system(size: 10, design: .serif))
-                        .foregroundStyle(ink.opacity(0.45))
+            Rectangle()
+                .fill(ink.opacity(0.15))
+                .frame(height: 1)
+                .padding(.top, 5)
+                .padding(.bottom, 6)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(rows) { row in
+                    rowView(row)
                 }
             }
             Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-}
 
-private struct MediumView: View {
-    let entry: FlowEntry
-
-    var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                CountdownText(entry: entry)
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(ink)
-                    .minimumScaleFactor(0.5)
+    @ViewBuilder
+    private func rowView(_ row: CardRow) -> some View {
+        switch row {
+        case .task(let task):
+            Button(intent: ToggleCardTaskIntent(taskID: task.id)) {
+                Text(task.title)
+                    .font(.system(size: 14, design: .serif))
+                    .strikethrough(task.isCompleted, color: ink.opacity(0.55))
+                    .foregroundStyle(task.isCompleted ? ink.opacity(0.38) : ink)
                     .lineLimit(1)
-                HStack(spacing: 10) {
-                    TomatoButton(entry: entry, size: 56)
-                    TimerControls(entry: entry)
-                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Rectangle()
-                .fill(ink.opacity(0.12))
-                .frame(width: 1)
-
-            TaskListView(entry: entry)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
+        case .message(let text):
+            Text(text)
+                .font(.system(size: 14, design: .serif))
+                .italic()
+                .foregroundStyle(ink.opacity(0.55))
+                .lineLimit(1)
+        case .more(let count):
+            Text("+\(count) more")
+                .font(.system(size: 12, design: .serif))
+                .foregroundStyle(ink.opacity(0.45))
         }
     }
 }
@@ -313,9 +335,9 @@ private struct RectangularView: View {
 }
 #endif
 
-// MARK: - Widget
+// MARK: - Widgets
 
-struct UntoFlowWidgetView: View {
+struct UntoFlowTimerWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: FlowEntry
 
@@ -327,42 +349,63 @@ struct UntoFlowWidgetView: View {
         case .accessoryRectangular:
             RectangularView(entry: entry)
         #endif
-        case .systemMedium:
-            MediumView(entry: entry)
         default:
-            SmallTimerView(entry: entry)
+            TomatoTimerView(entry: entry)
+                .padding(4)
         }
     }
 }
 
-struct UntoFlowWidget: Widget {
+/// Small tomato timer (plus Lock Screen sizes on iPhone).
+struct UntoFlowTimerWidget: Widget {
+    // Same kind as the original widget, so tomatoes already on a Home Screen keep working.
     let kind = "UntoFlowWidget"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: FlowProvider()) { entry in
-            UntoFlowWidgetView(entry: entry)
+            UntoFlowTimerWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
                     studioBackground
                 }
                 .widgetURL(openTimerURL)
         }
-        .configurationDisplayName("UNTO / FLOW")
-        .description("Set and start a tomato, and cross off today's tasks.")
+        .configurationDisplayName("Tomato")
+        .description("Set and start a focus tomato.")
         .supportedFamilies(Self.families)
+        .contentMarginsDisabled()
     }
 
     private static var families: [WidgetFamily] {
         #if targetEnvironment(macCatalyst) || os(macOS)
-        return [.systemSmall, .systemMedium]
+        return [.systemSmall]
         #else
-        return [.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular]
+        return [.systemSmall, .accessoryCircular, .accessoryRectangular]
         #endif
+    }
+}
+
+/// Wide to-do list from the front of today's card.
+struct UntoFlowCardWidget: Widget {
+    let kind = "UntoFlowCardWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: FlowProvider()) { entry in
+            CardListView(entry: entry)
+                .containerBackground(for: .widget) {
+                    studioBackground
+                }
+                .widgetURL(openCardURL)
+        }
+        .configurationDisplayName("Today's Card")
+        .description("Today's to-do list. Tap a task to cross it out.")
+        .supportedFamilies([.systemMedium])
     }
 }
 
 @main
 struct UntoFlowWidgetBundle: WidgetBundle {
     var body: some Widget {
-        UntoFlowWidget()
+        UntoFlowTimerWidget()
+        UntoFlowCardWidget()
     }
 }

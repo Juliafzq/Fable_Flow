@@ -54,14 +54,34 @@ enum WidgetTimerStore {
         }
     }
 
-    /// − / + buttons. Only changes the length while the timer isn't running or paused.
+    /// − / + buttons.
+    /// Ready: changes the set length. Running or paused: takes off or adds time to the countdown
+    /// (taking off the last minutes ends it).
     static func adjust(byMinutes delta: Int) {
         var state = load()
-        guard state.phase() == .idle else { return }
-        state.minutes = min(
-            WidgetTimerState.maxMinutes,
-            max(WidgetTimerState.minMinutes, state.minutes + delta)
-        )
+        let now = Date()
+        let deltaSeconds = TimeInterval(delta * 60)
+        let maxSeconds = TimeInterval(WidgetTimerState.maxMinutes * 60)
+        switch state.phase(at: now) {
+        case .idle:
+            state.minutes = min(
+                WidgetTimerState.maxMinutes,
+                max(WidgetTimerState.minMinutes, state.minutes + delta)
+            )
+        case .running(let endDate):
+            let remaining = min(maxSeconds, endDate.timeIntervalSince(now) + deltaSeconds)
+            if remaining <= 0 {
+                state.endDate = nil
+                cancelBell()
+            } else {
+                let end = now.addingTimeInterval(remaining)
+                state.endDate = end
+                scheduleBell(at: end)
+            }
+        case .paused(let remaining):
+            let next = min(maxSeconds, remaining + deltaSeconds)
+            state.pausedRemaining = next > 0 ? next : nil
+        }
         save(state)
     }
 
@@ -88,7 +108,7 @@ enum WidgetTimerStore {
         save(state)
     }
 
-    /// Stop button: back to the dialled-in length.
+    /// ↺ button (shown while paused): back to the set length.
     static func stop() {
         var state = load()
         state.endDate = nil

@@ -61,7 +61,7 @@ and the Mac is signed in to the **same Apple ID**:
 2. Right-click the desktop → **Edit Widgets…** → find **UNTO / FLOW** → drag it onto the desktop.
 
 **From the native Mac app (option B):** after one ▶ Run, right-click the desktop → **Edit Widgets…** → **UNTO / FLOW**.
-Pick **Small** (tomato timer) or **Medium** (tomato timer with big digits, plus today's to-do list you can cross off).
+Add **Tomato** (small timer) and/or **Today's Card** (wide to-do list you can cross off).
 See the widget table in `INSTALL_ON_IPHONE.md` for what each button does.
 
 The Chrome desktop app (option A) can't add a widget. Chrome web apps don't support macOS widgets.
