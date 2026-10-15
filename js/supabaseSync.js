@@ -352,7 +352,7 @@ export class SupabaseSyncService {
     const accounts = this._loadLocalAccounts();
     const existing = accounts[cleanEmail];
     if (!existing) {
-      throw new Error('Account not found — switch to Create Account');
+      throw new Error('No account on this device. Accounts don\'t sync between devices yet.');
     }
     if (existing.passwordHash && existing.passwordHash !== this._hashPassword(cleanPass)) {
       throw new Error('Incorrect password');

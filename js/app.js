@@ -1402,7 +1402,7 @@ export class FableFlowApp {
       if (this.els.authSyncModeBadge) {
         this.els.authSyncModeBadge.textContent = this.supabaseSync.isCloudConfigured()
           ? this.t('Supabase Cloud')
-          : this.t('Synced');
+          : this.t('This device only');
       }
       if (this.els.authLastSyncedLabel) {
         this.els.authLastSyncedLabel.textContent = this.t('Up to date');
