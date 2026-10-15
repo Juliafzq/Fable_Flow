@@ -44,3 +44,21 @@ create policy "Users can delete own state"
   on public.fable_flow_user_state
   for delete
   using (auth.uid() = user_id);
+
+-- =============================================================================
+-- Account lookup for the sign-in screen ("No account found under this email" vs "Wrong password",
+-- and Forgot password). Returns only true/false — never any account details.
+-- =============================================================================
+create or replace function public.account_exists(check_email text)
+returns boolean
+language sql
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from auth.users where lower(email) = lower(trim(check_email))
+  );
+$$;
+
+revoke all on function public.account_exists(text) from public;
+grant execute on function public.account_exists(text) to anon, authenticated;

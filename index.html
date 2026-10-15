@@ -10,14 +10,14 @@
   <meta name="apple-mobile-web-app-title" content="UNTO / FLOW" />
   <meta name="application-name" content="UNTO / FLOW" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261015_v77" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261015_v77" />
-  <link rel="manifest" href="manifest.json?v=20261015_v77" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=20261015_v78" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=20261015_v78" />
+  <link rel="manifest" href="manifest.json?v=20261015_v78" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <link rel="stylesheet" href="css/style.css?v=20261015_v77" />
-  <link rel="stylesheet" href="css/noto-serif-sc.css?v=20261015_v77" />
+  <link rel="stylesheet" href="css/style.css?v=20261015_v78" />
+  <link rel="stylesheet" href="css/noto-serif-sc.css?v=20261015_v78" />
   <link rel="preload" href="assets/fonts/eb-garamond-latin.woff2" as="font" type="font/woff2" crossorigin />
   <!-- Start downloading the main hero tomatoes immediately, so the tutorial tomato is ready on slow phones -->
   <link rel="preload" as="image" href="assets/tomatoes/hero-tomato-0.png?v=20261010_v26" />
@@ -493,10 +493,15 @@
           </div>
 
           <form id="auth-form" class="auth-form" novalidate>
-            <input id="auth-email-input" type="email" class="modal-input auth-input" placeholder="Email address" autocomplete="email" required />
-            <input id="auth-password-input" type="password" class="modal-input auth-input" placeholder="Password (6+ chars)" autocomplete="current-password" required />
+            <input id="auth-email-input" type="email" class="modal-input auth-input" placeholder="Email address" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" required />
+            <div class="auth-password-wrap">
+              <input id="auth-password-input" type="password" class="modal-input auth-input" placeholder="Password (6+ chars)" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required />
+              <button type="button" id="auth-password-toggle" class="auth-password-toggle" aria-label="Show password" title="Show password" aria-pressed="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            </div>
             <div id="auth-error-msg" class="auth-error-msg hidden" role="alert"></div>
+            <button type="button" id="auth-error-action-btn" class="auth-error-action-btn hidden">Create Account</button>
             <button type="submit" id="auth-submit-btn" class="modal-btn modal-btn-primary auth-primary-btn">Sign In</button>
+            <button type="button" id="auth-forgot-btn" class="auth-link-btn">Forgot password?</button>
           </form>
 
           <div class="auth-divider-row"><span>or</span></div>
@@ -518,6 +523,17 @@
               <span>Continue with Apple</span>
             </button>
           </div>
+        </div>
+
+        <!-- Reset Password View: opened from the emailed reset link -->
+        <div id="auth-view-reset" class="auth-view-section hidden">
+          <div class="modal-title auth-reset-title">Set a new password</div>
+          <div id="auth-reset-email" class="auth-reset-email"></div>
+          <form id="auth-reset-form" class="auth-form" novalidate>
+            <input id="auth-new-password-input" type="password" class="modal-input auth-input" placeholder="New password (6+ chars)" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required />
+            <div id="auth-reset-error-msg" class="auth-error-msg hidden" role="alert"></div>
+            <button type="submit" id="auth-reset-submit-btn" class="modal-btn modal-btn-primary auth-primary-btn">Save New Password</button>
+          </form>
         </div>
 
         <!-- Signed-In View: Account Summary, Sync Now & Sign Out -->
@@ -629,6 +645,6 @@
 
   </main>
 
-  <script type="module" src="js/app.js?v=20261015_v77"></script>
+  <script type="module" src="js/app.js?v=20261015_v78"></script>
 </body>
 </html>

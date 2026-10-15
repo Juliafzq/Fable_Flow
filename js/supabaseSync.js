@@ -235,18 +235,31 @@ export class SupabaseSyncService {
     try {
       if (typeof window === 'undefined' || !window.location.hash) return;
       const hash = window.location.hash.substring(1);
-      if (!hash.includes('access_token=')) return;
       const params = new URLSearchParams(hash);
+      if (params.get('error') || params.get('error_code')) {
+        // e.g. an old or already-used password reset link
+        const code = params.get('error_code') || '';
+        this.pendingAuthLinkError =
+          code === 'otp_expired'
+            ? 'This reset link has expired or was already used. Request a new one.'
+            : params.get('error_description') || 'That link didn\'t work. Request a new one.';
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        return;
+      }
+      if (!hash.includes('access_token=')) return;
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
+      const linkType = params.get('type') || '';
+      const expiresIn = Number(params.get('expires_in')) || 3600;
       if (accessToken && this.isCloudConfigured()) {
-        this._fetchSupabaseUserFromToken(accessToken, refreshToken);
+        if (linkType === 'recovery') this.passwordRecoveryPending = true;
+        this._linkSessionReady = this._fetchSupabaseUserFromToken(accessToken, refreshToken, linkType, expiresIn);
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
       }
     } catch (_) {}
   }
 
-  async _fetchSupabaseUserFromToken(accessToken, refreshToken) {
+  async _fetchSupabaseUserFromToken(accessToken, refreshToken, linkType = '', expiresIn = 3600) {
     try {
       const res = await fetch(`${this.config.url}/auth/v1/user`, {
         headers: {
@@ -260,7 +273,7 @@ export class SupabaseSyncService {
         this._saveSession({
           accessToken,
           refreshToken: refreshToken || null,
-          expiresAt: Math.floor(Date.now() / 1000) + 3600,
+          expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
           mode: 'supabase',
           lastSyncedAt: new Date().toISOString(),
           user: {
@@ -271,6 +284,9 @@ export class SupabaseSyncService {
         });
         if (typeof this.onAuthStateChange === 'function') {
           this.onAuthStateChange(this.getCurrentUser());
+        }
+        if (linkType === 'recovery' && typeof this.onPasswordRecovery === 'function') {
+          this.onPasswordRecovery(this.getCurrentUser());
         }
       }
     } catch (_) {}
@@ -408,7 +424,18 @@ export class SupabaseSyncService {
         if (/email not confirmed/i.test(msg)) {
           throw new Error('Check your email to confirm your account, then sign in');
         }
-        if (/invalid login credentials/i.test(msg) || res.status === 400) {
+        if (/invalid login credentials/i.test(msg) || data.error_code === 'invalid_credentials') {
+          const exists = await this.accountExists(cleanEmail);
+          if (exists === false) {
+            const err = new Error('No account found under this email.');
+            err.code = 'no_account';
+            throw err;
+          }
+          if (exists === true) {
+            const err = new Error('Wrong password. Try again, or tap "Forgot password?"');
+            err.code = 'wrong_password';
+            throw err;
+          }
           throw new Error('Wrong email or password');
         }
         throw new Error(msg || 'Sign-in failed');
@@ -442,6 +469,91 @@ export class SupabaseSyncService {
       },
     });
     return { user: this.getCurrentUser(), isNewUser: false };
+  }
+
+  /**
+   * true / false if the cloud can say whether an account uses this email, null if unknown
+   * (needs the public.account_exists() function from supabase/schema.sql).
+   */
+  async accountExists(email) {
+    const clean = String(email || '').trim().toLowerCase();
+    if (!clean || !this.isCloudConfigured()) return null;
+    try {
+      const res = await fetch(`${this.config.url}/rest/v1/rpc/account_exists`, {
+        method: 'POST',
+        headers: {
+          apikey: this.config.anonKey,
+          Authorization: `Bearer ${this.config.anonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ check_email: clean }),
+      });
+      if (!res.ok) return null;
+      const val = await res.json();
+      return val === true ? true : val === false ? false : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Emails a password reset link that opens this app. */
+  async requestPasswordReset(email) {
+    const clean = String(email || '').trim().toLowerCase();
+    if (!clean || !clean.includes('@')) {
+      throw new Error('Enter your email above first');
+    }
+    if (!this.isCloudConfigured()) {
+      throw new Error('Password reset needs cloud sync');
+    }
+    const exists = await this.accountExists(clean);
+    if (exists === false) {
+      const err = new Error('No account found under this email.');
+      err.code = 'no_account';
+      throw err;
+    }
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const res = await fetch(
+      `${this.config.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`,
+      {
+        method: 'POST',
+        headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: clean }),
+      }
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const msg = data.msg || data.error_description || data.message || '';
+      if (res.status === 429 || /rate limit|security purposes/i.test(msg)) {
+        throw new Error('Too many reset emails. Please wait a few minutes and try again.');
+      }
+      throw new Error(msg || "Couldn't send the reset email");
+    }
+    return true;
+  }
+
+  /** Sets a new password for the signed-in user (used after opening a reset link). */
+  async updatePassword(newPassword) {
+    const pw = String(newPassword || '');
+    if (pw.length < 6) throw new Error('Password must be at least 6 characters');
+    if (this._linkSessionReady) await this._linkSessionReady;
+    if (!this.session || this.session.mode !== 'supabase') {
+      throw new Error('This reset link has expired or was already used. Request a new one.');
+    }
+    const res = await this._authedFetch(`${this.config.url}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const msg = data.msg || data.error_description || data.message || '';
+      if (data.error_code === 'same_password' || /different from the old/i.test(msg)) {
+        throw new Error('Choose a password different from your old one');
+      }
+      throw new Error(msg || "Couldn't save the new password");
+    }
+    this.passwordRecoveryPending = false;
+    return true;
   }
 
   async _isExternalOAuthEnabled(provider) {

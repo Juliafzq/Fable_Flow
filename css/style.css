@@ -2610,6 +2610,76 @@ html.mobile-landscape-locked .app-viewport {
   padding: 2px 2px 0;
 }
 
+.auth-password-wrap {
+  position: relative;
+}
+
+.auth-password-wrap .auth-input {
+  width: 100%;
+  padding-right: 46px !important;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #5E5D59;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-error-msg.is-info {
+  color: #2F5D3A;
+}
+
+.auth-error-action-btn {
+  align-self: flex-start;
+  margin-top: -2px;
+  padding: 6px 14px;
+  min-height: 36px;
+  border: 1px solid #111111;
+  border-radius: 999px;
+  background: transparent;
+  color: #111111;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-link-btn {
+  align-self: center;
+  min-height: 40px;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: #5E5D59;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.auth-reset-email {
+  font-size: 15px;
+  color: #5E5D59;
+  margin-top: -4px;
+  word-break: break-all;
+}
+
 .auth-primary-btn {
   width: 100%;
   height: 38px;
@@ -3359,3 +3429,6 @@ html.lang-zh .about-block-lead {
 .modal-input { font-size: 18px; }
 .modal-btn { font-size: 17px; }
 .auth-input { font-size: 17px !important; }
+@media (max-width: 340px) {
+  .auth-modal-box { padding-left: 14px; padding-right: 14px; max-width: calc(100% - 28px); }
+}

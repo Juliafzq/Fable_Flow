@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v77';
-import { CardGestureMath } from './cardGestureMath.js?v=20261015_v77';
-import { SensoryEngine } from './sensoryEngine.js?v=20261015_v77';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v77';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v77';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v78';
+import { CardGestureMath } from './cardGestureMath.js?v=20261015_v78';
+import { SensoryEngine } from './sensoryEngine.js?v=20261015_v78';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v78';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v78';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261015_v77';
+} from './i18n.js?v=20261015_v78';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -41,6 +41,8 @@ const MAX_TASK_WORDS = 18;
 const MAX_TASK_CHARS = 110;
 const MAX_REFLECTION_WORDS = 95;
 const MAX_REFLECTION_CHARS = 520;
+const AUTH_EYE_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const AUTH_EYE_OFF_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.5 10.5 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 4.4-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 
 export class FableFlowApp {
   constructor() {
@@ -52,6 +54,10 @@ export class FableFlowApp {
     this._authMode = 'signin'; // 'signin' | 'signup'
     this.supabaseSync.onAuthStateChange = () => {
       this.syncFromAuthenticatedAccount(true);
+    };
+    // Opened the emailed "reset password" link: ask for the new password
+    this.supabaseSync.onPasswordRecovery = () => {
+      this.openAuthModal();
     };
 
     this.state = this.loadInitialState();
@@ -89,6 +95,12 @@ export class FableFlowApp {
       this.syncFromAuthenticatedAccount(true);
     }
     this.bindCloudSyncLifecycle();
+    if (this.supabaseSync.pendingAuthLinkError) {
+      const linkErr = this.supabaseSync.pendingAuthLinkError;
+      this.supabaseSync.pendingAuthLinkError = null;
+      this.openAuthModal('signin');
+      this.showAuthError(this.t(linkErr));
+    }
     this.registerServiceWorker();
   }
 
@@ -720,6 +732,15 @@ export class FableFlowApp {
       authPasswordInput: document.getElementById('auth-password-input'),
       authErrorMsg: document.getElementById('auth-error-msg'),
       authSubmitBtn: document.getElementById('auth-submit-btn'),
+      authPasswordToggle: document.getElementById('auth-password-toggle'),
+      authErrorActionBtn: document.getElementById('auth-error-action-btn'),
+      authForgotBtn: document.getElementById('auth-forgot-btn'),
+      authViewReset: document.getElementById('auth-view-reset'),
+      authResetEmail: document.getElementById('auth-reset-email'),
+      authResetForm: document.getElementById('auth-reset-form'),
+      authNewPasswordInput: document.getElementById('auth-new-password-input'),
+      authResetErrorMsg: document.getElementById('auth-reset-error-msg'),
+      authResetSubmitBtn: document.getElementById('auth-reset-submit-btn'),
       authGoogleBtn: document.getElementById('auth-google-btn'),
       authAppleBtn: document.getElementById('auth-apple-btn'),
       authUserEmailDisplay: document.getElementById('auth-user-email-display'),
@@ -1294,6 +1315,40 @@ export class FableFlowApp {
         await this.handleAuthFormSubmit();
       });
     }
+    if (this.els.authPasswordToggle && this.els.authPasswordInput) {
+      this.els.authPasswordToggle.addEventListener('click', () => {
+        const show = this.els.authPasswordInput.type === 'password';
+        this.els.authPasswordInput.type = show ? 'text' : 'password';
+        this.els.authPasswordToggle.innerHTML = show ? AUTH_EYE_OFF_SVG : AUTH_EYE_SVG;
+        this.els.authPasswordToggle.setAttribute('aria-pressed', show ? 'true' : 'false');
+        const label = this.t(show ? 'Hide password' : 'Show password');
+        this.els.authPasswordToggle.setAttribute('aria-label', label);
+        this.els.authPasswordToggle.setAttribute('title', label);
+      });
+    }
+    if (this.els.authForgotBtn) {
+      this.els.authForgotBtn.addEventListener('click', async () => {
+        await this.handleForgotPassword();
+      });
+    }
+    if (this.els.authErrorActionBtn) {
+      this.els.authErrorActionBtn.addEventListener('click', () => {
+        // Keep the typed email, switch to Create Account
+        this._authMode = 'signup';
+        this.hideAuthError();
+        this.renderAuthModalState();
+        if (this.els.authPasswordInput) {
+          this.els.authPasswordInput.value = '';
+          this.els.authPasswordInput.focus();
+        }
+      });
+    }
+    if (this.els.authResetForm) {
+      this.els.authResetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handlePasswordResetSubmit();
+      });
+    }
     if (this.els.authGoogleBtn) {
       this.els.authGoogleBtn.addEventListener('click', async () => {
         await this.handleOAuthProviderLogin('google');
@@ -1361,26 +1416,86 @@ export class FableFlowApp {
     this.hideAuthError();
   }
 
-  showAuthError(msg) {
+  showAuthError(msg, options = {}) {
     if (!this.els.authErrorMsg) return;
     this.els.authErrorMsg.textContent = msg;
+    this.els.authErrorMsg.classList.toggle('is-info', Boolean(options.info));
     this.els.authErrorMsg.classList.remove('hidden');
+    if (this.els.authErrorActionBtn) {
+      this.els.authErrorActionBtn.classList.toggle('hidden', options.action !== 'create');
+    }
   }
 
   hideAuthError() {
+    if (this.els.authErrorActionBtn) this.els.authErrorActionBtn.classList.add('hidden');
     if (!this.els.authErrorMsg) return;
     this.els.authErrorMsg.textContent = '';
+    this.els.authErrorMsg.classList.remove('is-info');
     this.els.authErrorMsg.classList.add('hidden');
+  }
+
+  /** Shows a sign-in / reset error, offering "Create Account" when the email isn't registered. */
+  showAuthFailure(err, fallbackKey) {
+    const msg = err && err.message ? this.t(err.message) : this.t(fallbackKey);
+    this.showAuthError(msg, { action: err && err.code === 'no_account' ? 'create' : null });
+  }
+
+  async handleForgotPassword() {
+    this.hideAuthError();
+    const email = this.els.authEmailInput ? this.els.authEmailInput.value.trim() : '';
+    if (!email) {
+      this.showAuthError(this.t('Enter your email above first'));
+      if (this.els.authEmailInput) this.els.authEmailInput.focus();
+      return;
+    }
+    const btn = this.els.authForgotBtn;
+    if (btn) btn.disabled = true;
+    try {
+      await this.supabaseSync.requestPasswordReset(email);
+      this.showAuthError(this.t('Reset link sent to {email}. Check your inbox (and spam).', { email }), {
+        info: true,
+      });
+    } catch (err) {
+      this.showAuthFailure(err, "Couldn't send the reset email");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async handlePasswordResetSubmit() {
+    const errEl = this.els.authResetErrorMsg;
+    if (errEl) errEl.classList.add('hidden');
+    const pw = this.els.authNewPasswordInput ? this.els.authNewPasswordInput.value : '';
+    try {
+      await this.supabaseSync.updatePassword(pw);
+      if (this.els.authNewPasswordInput) this.els.authNewPasswordInput.value = '';
+      this.renderAuthModalState();
+      this.closeAuthModal();
+      this.showTelemetryToast(this.t('Password updated. You can sign in with it on any device.'));
+      this.syncFromAuthenticatedAccount(true);
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err && err.message ? this.t(err.message) : this.t("Couldn't save the new password");
+        errEl.classList.remove('hidden');
+      }
+    }
   }
 
   renderAuthModalState() {
     const isLogged = this.supabaseSync && this.supabaseSync.isLoggedIn();
     const user = isLogged ? this.supabaseSync.getCurrentUser() : null;
+    const isResetting = Boolean(isLogged && this.supabaseSync.passwordRecoveryPending);
     if (this.els.authViewSignedOut) {
       this.els.authViewSignedOut.classList.toggle('hidden', Boolean(isLogged));
     }
     if (this.els.authViewSignedIn) {
-      this.els.authViewSignedIn.classList.toggle('hidden', !isLogged);
+      this.els.authViewSignedIn.classList.toggle('hidden', !isLogged || isResetting);
+    }
+    if (this.els.authViewReset) {
+      this.els.authViewReset.classList.toggle('hidden', !isResetting);
+      if (isResetting && this.els.authResetEmail && user) {
+        this.els.authResetEmail.textContent = user.email;
+      }
     }
 
     if (!isLogged) {
@@ -1395,6 +1510,19 @@ export class FableFlowApp {
       }
       if (this.els.authSubmitBtn) {
         this.els.authSubmitBtn.textContent = this.t(isSignup ? 'Create Account' : 'Sign In');
+      }
+      if (this.els.authForgotBtn) {
+        this.els.authForgotBtn.classList.toggle(
+          'hidden',
+          isSignup || !this.supabaseSync.isCloudConfigured()
+        );
+      }
+      if (this.els.authPasswordInput) {
+        // Lets the browser offer the saved password for Sign In, and a fresh one for Create Account
+        this.els.authPasswordInput.setAttribute(
+          'autocomplete',
+          isSignup ? 'new-password' : 'current-password'
+        );
       }
     } else if (user) {
       if (this.els.authUserEmailDisplay) {
@@ -1433,7 +1561,7 @@ export class FableFlowApp {
         this.showTelemetryToast(this.t('Signed in as {email}', { email: user.email }));
       }
     } catch (err) {
-      this.showAuthError(err && err.message ? this.t(err.message) : this.t('Authentication failed'));
+      this.showAuthFailure(err, 'Authentication failed');
     }
   }
 
