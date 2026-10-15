@@ -144,6 +144,10 @@ const ZH = {
   'Account not found — switch to Create Account': '这个邮箱还没注册，请先注册',
   "No account on this device. Accounts don't sync between devices yet.": '这台设备上没有这个账号。账号暂时还不能在设备之间同步。',
   'Incorrect password': '密码不对，请再试一次',
+  'Wrong email or password': '邮箱或密码不对',
+  'Check your email to confirm your account, then sign in': '请先到邮箱确认账号，然后再登录',
+  "Google / Apple sign-in isn't set up yet. Use email and password.": 'Google / Apple 登录暂未开通，请用邮箱和密码',
+  "Couldn't reach cloud sync. Changes are kept on this device.": '暂时连不上云端，改动已保存在本设备',
   'Authentication failed': '登录失败，请稍后再试',
   'Sign-in failed': '登录失败，请稍后再试',
 

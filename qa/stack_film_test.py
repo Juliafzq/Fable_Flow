@@ -8,7 +8,8 @@ c.js("""(() => { const a = window.fableFlowApp; document.getElementById('about-m
   a.state.hasCompletedOnboarding = true; a.ensureTourDemoArchiveCards(); a.state.activePillar = 'stack';
   const keys = a.getNavigableStackDateKeys(); a.state.selectedStackDateKey = keys[keys.length - 3];
   a.state.isStackCardFlipped = false; a._stackFlipDeg = 0; a.renderAll(); })()""")
-time.sleep(0.8)
+# Let one-time startup work (fonts, 3D tomato, offline cache) finish so it can't overlap the timed flick
+time.sleep(3.0)
 card = c.js("(() => { const r = document.getElementById('stack-card-3d').getBoundingClientRect(); return [r.left, r.right, r.top + r.height * 0.5, r.width]; })()")
 X0 = card[0] + 12  # left edge zone of the card
 Y = card[2]

@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v76';
-import { CardGestureMath } from './cardGestureMath.js?v=20261015_v76';
-import { SensoryEngine } from './sensoryEngine.js?v=20261015_v76';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v76';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v76';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261015_v77';
+import { CardGestureMath } from './cardGestureMath.js?v=20261015_v77';
+import { SensoryEngine } from './sensoryEngine.js?v=20261015_v77';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261015_v77';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261015_v77';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261015_v76';
+} from './i18n.js?v=20261015_v77';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -86,8 +86,9 @@ export class FableFlowApp {
     this.refitTypographyWhenFontsLoad();
     this.initFirstTimeOnboarding();
     if (this.supabaseSync.isLoggedIn()) {
-      this.syncFromAuthenticatedAccount(false);
+      this.syncFromAuthenticatedAccount(true);
     }
+    this.bindCloudSyncLifecycle();
     this.registerServiceWorker();
   }
 
@@ -1401,7 +1402,7 @@ export class FableFlowApp {
       }
       if (this.els.authSyncModeBadge) {
         this.els.authSyncModeBadge.textContent = this.supabaseSync.isCloudConfigured()
-          ? this.t('Supabase Cloud')
+          ? this.t('Synced')
           : this.t('This device only');
       }
       if (this.els.authLastSyncedLabel) {
@@ -1482,10 +1483,42 @@ export class FableFlowApp {
     this.showTelemetryToast(this.t('Signed out'));
   }
 
-  async syncFromAuthenticatedAccount(renderImmediately = true) {
+  /**
+   * Loads this account's cards from the cloud. With onlyIfNewer, it only applies a copy that
+   * another device saved after this one last synced (used when the app comes back to the front).
+   * If the cloud can't be reached, nothing is overwritten in either direction.
+   */
+  async syncFromAuthenticatedAccount(renderImmediately = true, onlyIfNewer = false) {
     if (!this.supabaseSync || !this.supabaseSync.isLoggedIn()) return;
+    const sync = this.supabaseSync;
     const prevPillar = this.state && this.state.activePillar ? this.state.activePillar : 'card';
-    const cloudState = await this.supabaseSync.pullCloudState();
+    let cloudState = null;
+    let cloudUpdatedAt = null;
+    try {
+      if (sync.isCloudConfigured()) {
+        const rec = await sync.pullCloudRecord();
+        if (rec) {
+          cloudState = rec.state;
+          cloudUpdatedAt = rec.updatedAt;
+        }
+      } else {
+        cloudState = await sync.pullCloudState();
+      }
+    } catch (_) {
+      if (!onlyIfNewer) {
+        this.showTelemetryToast(this.t("Couldn't reach cloud sync. Changes are kept on this device."));
+      }
+      return;
+    }
+    if (onlyIfNewer) {
+      const seen = Math.max(
+        Date.parse(this._lastAppliedCloudAt || '') || 0,
+        Date.parse(sync.lastPushedAt || '') || 0
+      );
+      const cloudT = Date.parse(cloudUpdatedAt || '') || 0;
+      if (!cloudState || cloudT <= seen || sync._syncTimer) return;
+    }
+    if (cloudUpdatedAt) this._lastAppliedCloudAt = cloudUpdatedAt;
     if (
       cloudState &&
       Array.isArray(cloudState.tasks) &&
@@ -1520,10 +1553,31 @@ export class FableFlowApp {
       if (renderImmediately) {
         this.renderAll();
       }
-    } else {
+    } else if (!onlyIfNewer) {
       await this.supabaseSync.pushCloudState(this.state);
     }
     this.updateProfileAccountLabel();
+  }
+
+  /** Two devices, one account: send changes when the app goes to the background, fetch newer ones when it returns. */
+  bindCloudSyncLifecycle() {
+    if (typeof document === 'undefined' || this._cloudLifecycleBound) return;
+    this._cloudLifecycleBound = true;
+    let lastPullAt = 0;
+    document.addEventListener('visibilitychange', () => {
+      const sync = this.supabaseSync;
+      if (!sync || !sync.isLoggedIn() || !sync.isCloudConfigured()) return;
+      if (document.visibilityState === 'hidden') {
+        if (sync._syncTimer) {
+          clearTimeout(sync._syncTimer);
+          sync._syncTimer = null;
+          sync.pushCloudState(this.state);
+        }
+      } else if (Date.now() - lastPullAt > 4000) {
+        lastPullAt = Date.now();
+        this.syncFromAuthenticatedAccount(true, true);
+      }
+    });
   }
 
   registerServiceWorker() {

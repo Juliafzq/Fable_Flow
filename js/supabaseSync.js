@@ -17,8 +17,8 @@ const USER_VAULT_PREFIX = 'fable_flow_user_vault_';
 
 // Built-in default project configuration (populated by scripts/provision_supabase.py or UI)
 export const DEFAULT_SUPABASE_CONFIG = {
-  url: '',
-  anonKey: '',
+  url: 'https://hnuzvsdxrtcuylfvoftn.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhudXp2c2R4cnRjdXlsZnZvZnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwNzIyMzMsImV4cCI6MjEwNzY0ODIzM30.i_UeE3WGSG_xboeUA0zYWZBy3HCQ8qO2oOkCusk780c',
 };
 
 export class SupabaseSyncService {
@@ -126,6 +126,12 @@ export class SupabaseSyncService {
           localStorage.removeItem(SESSION_STORAGE_KEY);
           return null;
         }
+        // A device-only ("local vault") login can't talk to the cloud: ask for a real sign-in.
+        // The cards themselves stay on the device; nothing is deleted.
+        if (this.isCloudConfigured() && parsed.mode !== 'supabase') {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+          return null;
+        }
         return parsed;
       }
       return null;
@@ -143,6 +149,78 @@ export class SupabaseSyncService {
         localStorage.removeItem(SESSION_STORAGE_KEY);
       }
     } catch (_) {}
+  }
+
+  /** Builds a cloud session from a GoTrue token response (keeps the expiry so we can refresh). */
+  _cloudSessionFrom(data, fallbackEmail, provider = 'email') {
+    const userObj = data.user || {};
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expiresAt = data.expires_at || (data.expires_in ? nowSec + Number(data.expires_in) : nowSec + 3600);
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || null,
+      expiresAt,
+      mode: 'supabase',
+      lastSyncedAt: new Date().toISOString(),
+      user: {
+        id: userObj.id,
+        email: userObj.email || fallbackEmail,
+        provider,
+      },
+    };
+  }
+
+  /** Cloud logins last an hour; renew with the refresh token so syncing never silently stops. */
+  async _refreshSession() {
+    if (!this.session || !this.session.refreshToken) return false;
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = (async () => {
+      try {
+        const res = await fetch(`${this.config.url}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: this.session.refreshToken }),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (!data.access_token) return false;
+        const next = this._cloudSessionFrom(data, this.session.user.email, this.session.user.provider);
+        next.user.id = next.user.id || this.session.user.id;
+        next.lastSyncedAt = this.session.lastSyncedAt || next.lastSyncedAt;
+        this._saveSession(next);
+        return true;
+      } catch (_) {
+        return false;
+      } finally {
+        setTimeout(() => {
+          this._refreshing = null;
+        }, 0);
+      }
+    })();
+    return this._refreshing;
+  }
+
+  /** fetch() with the user's cloud token; refreshes it first if it's about to expire, retries once on 401. */
+  async _authedFetch(url, options = {}) {
+    if (!this.session || !this.session.accessToken) throw new Error('Not signed in');
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (this.session.expiresAt && this.session.expiresAt - 60 < nowSec) {
+      await this._refreshSession();
+    }
+    const doFetch = () =>
+      fetch(url, {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          apikey: this.config.anonKey,
+          Authorization: `Bearer ${this.session.accessToken}`,
+        },
+      });
+    let res = await doFetch();
+    if (res.status === 401 && (await this._refreshSession())) {
+      res = await doFetch();
+    }
+    return res;
   }
 
   getCurrentUser() {
@@ -182,6 +260,7 @@ export class SupabaseSyncService {
         this._saveSession({
           accessToken,
           refreshToken: refreshToken || null,
+          expiresAt: Math.floor(Date.now() / 1000) + 3600,
           mode: 'supabase',
           lastSyncedAt: new Date().toISOString(),
           user: {
@@ -259,22 +338,18 @@ export class SupabaseSyncService {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.msg || data.error_description || data.message || 'Sign up failed');
+        const msg = data.msg || data.error_description || data.message || '';
+        if (/already registered|already exists/i.test(msg)) {
+          throw new Error('Account already exists — switch to Sign In');
+        }
+        throw new Error(msg || 'Sign up failed');
       }
-      const userObj = data.user || data;
-      const nowIso = new Date().toISOString();
-      this.lastSyncedAt = nowIso;
-      this._saveSession({
-        accessToken: data.access_token || null,
-        refreshToken: data.refresh_token || null,
-        mode: 'supabase',
-        lastSyncedAt: nowIso,
-        user: {
-          id: userObj.id || this._makeDeterministicUserId(cleanEmail),
-          email: cleanEmail,
-          provider: 'email',
-        },
-      });
+      if (!data.access_token) {
+        throw new Error('Check your email to confirm your account, then sign in');
+      }
+      const session = this._cloudSessionFrom(data, cleanEmail);
+      this.lastSyncedAt = session.lastSyncedAt;
+      this._saveSession(session);
       return { user: this.getCurrentUser(), isNewUser: true };
     }
 
@@ -329,22 +404,18 @@ export class SupabaseSyncService {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error_description || data.msg || data.message || 'Invalid login credentials');
+        const msg = data.error_description || data.msg || data.message || '';
+        if (/email not confirmed/i.test(msg)) {
+          throw new Error('Check your email to confirm your account, then sign in');
+        }
+        if (/invalid login credentials/i.test(msg) || res.status === 400) {
+          throw new Error('Wrong email or password');
+        }
+        throw new Error(msg || 'Sign-in failed');
       }
-      const userObj = data.user || {};
-      const nowIso = new Date().toISOString();
-      this.lastSyncedAt = nowIso;
-      this._saveSession({
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token || null,
-        mode: 'supabase',
-        lastSyncedAt: nowIso,
-        user: {
-          id: userObj.id || this._makeDeterministicUserId(cleanEmail),
-          email: userObj.email || cleanEmail,
-          provider: 'email',
-        },
-      });
+      const session = this._cloudSessionFrom(data, cleanEmail);
+      this.lastSyncedAt = session.lastSyncedAt;
+      this._saveSession(session);
       return { user: this.getCurrentUser(), isNewUser: false };
     }
 
@@ -419,71 +490,9 @@ export class SupabaseSyncService {
     }
 
     if (this.isCloudConfigured()) {
-
-      // Cloud configured without external OAuth client ID yet: provision/authenticate
-      // the Google/Apple account directly in Supabase GoTrue so state syncs to Postgres.
-      const providerTokenPass = `ff_oauth_${cleanProvider}_${this._hashPassword(cleanEmail)}`;
-      try {
-        const tokenRes = await fetch(`${this.config.url}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: {
-            apikey: this.config.anonKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email: cleanEmail, password: providerTokenPass }),
-        });
-        if (tokenRes.ok) {
-          const data = await tokenRes.json().catch(() => ({}));
-          const userObj = data.user || {};
-          const nowIso = new Date().toISOString();
-          this.lastSyncedAt = nowIso;
-          this._saveSession({
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token || null,
-            mode: 'supabase',
-            lastSyncedAt: nowIso,
-            user: {
-              id: userObj.id || this._makeDeterministicUserId(cleanEmail),
-              email: userObj.email || cleanEmail,
-              provider: cleanProvider,
-            },
-          });
-          return { user: this.getCurrentUser(), isNewUser: false };
-        }
-
-        const signupRes = await fetch(`${this.config.url}/auth/v1/signup`, {
-          method: 'POST',
-          headers: {
-            apikey: this.config.anonKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password: providerTokenPass,
-            data: { provider: cleanProvider },
-          }),
-        });
-        if (signupRes.ok) {
-          const data = await signupRes.json().catch(() => ({}));
-          const userObj = data.user || data;
-          const nowIso = new Date().toISOString();
-          this.lastSyncedAt = nowIso;
-          this._saveSession({
-            accessToken: data.access_token || null,
-            refreshToken: data.refresh_token || null,
-            mode: 'supabase',
-            lastSyncedAt: nowIso,
-            user: {
-              id: userObj.id || this._makeDeterministicUserId(cleanEmail),
-              email: cleanEmail,
-              provider: cleanProvider,
-            },
-          });
-          return { user: this.getCurrentUser(), isNewUser: true };
-        }
-      } catch (_) {
-        // Fall through to Local Vault Mode if offline
-      }
+      // Real Google / Apple sign-in isn't connected yet. (Never fake it with a password derived
+      // from the email address: anyone who knew the email could open the account.)
+      throw new Error('Google / Apple sign-in isn\'t set up yet. Use email and password.');
     }
 
     const accounts = this._loadLocalAccounts();
@@ -553,33 +562,34 @@ export class SupabaseSyncService {
     } catch (_) {}
   }
 
+  /**
+   * Returns { state, updatedAt } from the cloud, or null if this account has no cloud copy yet.
+   * Throws if the cloud can't be reached, so callers never mistake an outage for "empty".
+   */
+  async pullCloudRecord() {
+    const user = this.getCurrentUser();
+    if (!user || !this.isCloudConfigured() || !this.session || !this.session.accessToken) return null;
+    const url = `${this.config.url}/rest/v1/fable_flow_user_state?user_id=eq.${encodeURIComponent(
+      user.id
+    )}&select=state_json,updated_at`;
+    const res = await this._authedFetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(`Cloud sync unavailable (${res.status})`);
+    const rows = await res.json();
+    if (Array.isArray(rows) && rows.length > 0 && rows[0].state_json) {
+      this.lastSyncedAt = rows[0].updated_at || new Date().toISOString();
+      this.saveUserVaultState(user.id, rows[0].state_json);
+      return { state: rows[0].state_json, updatedAt: rows[0].updated_at || null };
+    }
+    return null;
+  }
+
   async pullCloudState() {
     const user = this.getCurrentUser();
     if (!user) return null;
-
-    if (this.isCloudConfigured() && this.session && this.session.accessToken) {
-      try {
-        const url = `${this.config.url}/rest/v1/fable_flow_user_state?user_id=eq.${encodeURIComponent(
-          user.id
-        )}&select=state_json,updated_at`;
-        const res = await fetch(url, {
-          headers: {
-            apikey: this.config.anonKey,
-            Authorization: `Bearer ${this.session.accessToken}`,
-            Accept: 'application/json',
-          },
-        });
-        if (res.ok) {
-          const rows = await res.json();
-          if (Array.isArray(rows) && rows.length > 0 && rows[0].state_json) {
-            this.lastSyncedAt = rows[0].updated_at || new Date().toISOString();
-            this.saveUserVaultState(user.id, rows[0].state_json);
-            return rows[0].state_json;
-          }
-        }
-      } catch (_) {}
+    if (this.isCloudConfigured() && this.session && this.session.mode === 'supabase') {
+      const rec = await this.pullCloudRecord();
+      return rec ? rec.state : null;
     }
-
     const localRecord = this.loadUserVaultState(user.id);
     if (localRecord && localRecord.state) {
       this.lastSyncedAt = localRecord.updatedAt || this.lastSyncedAt;
@@ -604,11 +614,9 @@ export class SupabaseSyncService {
     if (this.isCloudConfigured() && this.session && this.session.accessToken) {
       try {
         this.isSyncing = true;
-        const res = await fetch(`${this.config.url}/rest/v1/fable_flow_user_state`, {
+        const res = await this._authedFetch(`${this.config.url}/rest/v1/fable_flow_user_state`, {
           method: 'POST',
           headers: {
-            apikey: this.config.anonKey,
-            Authorization: `Bearer ${this.session.accessToken}`,
             'Content-Type': 'application/json',
             Prefer: 'resolution=merge-duplicates,return=minimal',
           },
@@ -620,6 +628,7 @@ export class SupabaseSyncService {
           }),
         });
         this.isSyncing = false;
+        if (res.ok) this.lastPushedAt = nowIso;
         return res.ok;
       } catch (_) {
         this.isSyncing = false;
@@ -639,6 +648,7 @@ export class SupabaseSyncService {
       clearTimeout(this._syncTimer);
     }
     this._syncTimer = setTimeout(() => {
+      this._syncTimer = null;
       this.pushCloudState(statePayload);
     }, delayMs);
   }
