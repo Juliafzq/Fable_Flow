@@ -23,6 +23,7 @@ ui = lambda: c.js("""(() => { const a = window.fableFlowApp, e = a.els; const vi
 # Simulate the account_exists() lookup + /recover (no email sent) by wrapping fetch
 c.js("""(() => { const real = window.fetch; window.__lookup = null; window.__recoverCalls = [];
   window.fetch = async (url, opts) => { const u = String(url);
+    if (u.includes('/rest/v1/rpc/account_exists') && window.__lookup === 'missing') return new Response('{"code":"PGRST202"}', { status: 404 });
     if (u.includes('/rest/v1/rpc/account_exists') && window.__lookup !== null) return new Response(JSON.stringify(window.__lookup), { status: 200 });
     if (u.includes('/auth/v1/recover')) { window.__recoverCalls.push({ u, body: opts && opts.body }); return new Response('{}', { status: 200 }); }
     return real(url, opts); }; })()""")
@@ -49,7 +50,7 @@ res['Create Account button switches tab and keeps the email'] = u2['mode'] == 's
 c.js("window.__lookup = true")
 u = submit('signin', EMAIL, 'definitely-wrong')
 res['known email + wrong password -> "Wrong password ... Forgot password?"'] = (u['msg'] or '').startswith('Wrong password') and not u['createBtn']
-c.js("window.__lookup = null")
+c.js("window.__lookup = 'missing'")
 u = submit('signin', EMAIL, 'definitely-wrong')
 res['before the SQL function exists -> generic message (no crash)'] = u['msg'] == 'Wrong email or password'
 

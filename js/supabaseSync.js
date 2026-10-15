@@ -151,6 +151,20 @@ export class SupabaseSyncService {
     } catch (_) {}
   }
 
+  /**
+   * fetch() that turns the browser's cryptic network errors ("Load failed" in Safari,
+   * "Failed to fetch" in Chrome) into a clear message.
+   */
+  async _fetch(url, options) {
+    try {
+      return await fetch(url, options);
+    } catch (e) {
+      const err = new Error("Can't reach the sync server. Check your internet connection, or try another Wi-Fi or mobile data.");
+      err.code = 'network';
+      throw err;
+    }
+  }
+
   /** Builds a cloud session from a GoTrue token response (keeps the expiry so we can refresh). */
   _cloudSessionFrom(data, fallbackEmail, provider = 'email') {
     const userObj = data.user || {};
@@ -176,7 +190,7 @@ export class SupabaseSyncService {
     if (this._refreshing) return this._refreshing;
     this._refreshing = (async () => {
       try {
-        const res = await fetch(`${this.config.url}/auth/v1/token?grant_type=refresh_token`, {
+        const res = await this._fetch(`${this.config.url}/auth/v1/token?grant_type=refresh_token`, {
           method: 'POST',
           headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: this.session.refreshToken }),
@@ -208,7 +222,7 @@ export class SupabaseSyncService {
       await this._refreshSession();
     }
     const doFetch = () =>
-      fetch(url, {
+      this._fetch(url, {
         ...options,
         headers: {
           ...(options.headers || {}),
@@ -261,7 +275,7 @@ export class SupabaseSyncService {
 
   async _fetchSupabaseUserFromToken(accessToken, refreshToken, linkType = '', expiresIn = 3600) {
     try {
-      const res = await fetch(`${this.config.url}/auth/v1/user`, {
+      const res = await this._fetch(`${this.config.url}/auth/v1/user`, {
         headers: {
           apikey: this.config.anonKey,
           Authorization: `Bearer ${accessToken}`,
@@ -344,7 +358,7 @@ export class SupabaseSyncService {
     }
 
     if (this.isCloudConfigured()) {
-      const res = await fetch(`${this.config.url}/auth/v1/signup`, {
+      const res = await this._fetch(`${this.config.url}/auth/v1/signup`, {
         method: 'POST',
         headers: {
           apikey: this.config.anonKey,
@@ -410,7 +424,7 @@ export class SupabaseSyncService {
     }
 
     if (this.isCloudConfigured()) {
-      const res = await fetch(`${this.config.url}/auth/v1/token?grant_type=password`, {
+      const res = await this._fetch(`${this.config.url}/auth/v1/token?grant_type=password`, {
         method: 'POST',
         headers: {
           apikey: this.config.anonKey,
@@ -479,7 +493,7 @@ export class SupabaseSyncService {
     const clean = String(email || '').trim().toLowerCase();
     if (!clean || !this.isCloudConfigured()) return null;
     try {
-      const res = await fetch(`${this.config.url}/rest/v1/rpc/account_exists`, {
+      const res = await this._fetch(`${this.config.url}/rest/v1/rpc/account_exists`, {
         method: 'POST',
         headers: {
           apikey: this.config.anonKey,
@@ -512,7 +526,7 @@ export class SupabaseSyncService {
       throw err;
     }
     const redirectTo = `${window.location.origin}${window.location.pathname}`;
-    const res = await fetch(
+    const res = await this._fetch(
       `${this.config.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`,
       {
         method: 'POST',
@@ -561,7 +575,7 @@ export class SupabaseSyncService {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 2500);
-      const res = await fetch(`${this.config.url}/auth/v1/settings`, {
+      const res = await this._fetch(`${this.config.url}/auth/v1/settings`, {
         headers: { apikey: this.config.anonKey },
         signal: controller.signal,
       });
@@ -638,7 +652,7 @@ export class SupabaseSyncService {
   async signOut() {
     if (this.isCloudConfigured() && this.session && this.session.accessToken) {
       try {
-        await fetch(`${this.config.url}/auth/v1/logout`, {
+        await this._fetch(`${this.config.url}/auth/v1/logout`, {
           method: 'POST',
           headers: {
             apikey: this.config.anonKey,
