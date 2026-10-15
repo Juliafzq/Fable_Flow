@@ -15,6 +15,14 @@ const SESSION_STORAGE_KEY = 'fable_flow_auth_session_v1';
 const LOCAL_ACCOUNTS_KEY = 'fable_flow_accounts_v1';
 const USER_VAULT_PREFIX = 'fable_flow_user_vault_';
 
+// "Continue with Google" talks to Google directly from the app's own domain, so Google's screens say
+// "flow.untoworld.com" instead of the Supabase project address. Google returns an ID token to
+// auth-return.html, and Supabase signs the user in with it. Other hosts use Supabase's redirect flow.
+export const GOOGLE_WEB_CLIENT_ID = '1054263793454-h8q5lhki7k9gjkt7g1io528437i3dhpe.apps.googleusercontent.com';
+// Switched on once the Google client lists https://flow.untoworld.com/auth-return.html as a redirect URI.
+export const OWN_GOOGLE_ORIGINS = [];
+const GOOGLE_PENDING_KEY = 'fable_flow_google_pending_v1';
+
 // Built-in default project configuration (populated by scripts/provision_supabase.py or UI)
 export const DEFAULT_SUPABASE_CONFIG = {
   url: 'https://hnuzvsdxrtcuylfvoftn.supabase.co',
@@ -196,7 +204,7 @@ export class SupabaseSyncService {
     try {
       if (typeof window === 'undefined' || !window.location.hash) return;
       const hash = window.location.hash.substring(1);
-      if (!/access_token=|error=|error_code=/.test(hash)) return;
+      if (!/access_token=|id_token=|error=|error_code=/.test(hash)) return;
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
       this.handleAuthFragment(hash);
     } catch (_) {}
@@ -208,7 +216,19 @@ export class SupabaseSyncService {
    */
   handleAuthFragment(fragment) {
     const params = new URLSearchParams(String(fragment || '').replace(/^#/, ''));
-    if (params.get('error') === 'cancelled') return 'cancelled';
+    // "Cancel" on Google's screen comes back as a bare access_denied; Supabase errors (e.g. an expired
+    // reset link) also say access_denied but carry an error_code, and those should be shown.
+    const googleCancelled = params.get('error') === 'access_denied' && !params.get('error_code');
+    if (params.get('error') === 'cancelled' || googleCancelled) return 'cancelled';
+    if (params.get('id_token') && this.isCloudConfigured()) {
+      this._linkSessionReady = this._signInWithGoogleIdToken(params.get('id_token'), params.get('state') || '').catch(
+        (err) => {
+          if (typeof this.onAuthLinkError === 'function') this.onAuthLinkError(err.message || 'Sign-in failed');
+          else this.pendingAuthLinkError = err.message || 'Sign-in failed';
+        }
+      );
+      return 'signed-in';
+    }
     if (params.get('error') || params.get('error_code')) {
       const code = params.get('error_code') || '';
       const msg =
@@ -575,6 +595,69 @@ export class SupabaseSyncService {
     return '';
   }
 
+  /** True when this page is served from a domain registered with Google for the direct flow. */
+  _canUseOwnGoogleFlow() {
+    return typeof window !== 'undefined' && OWN_GOOGLE_ORIGINS.includes(window.location.origin);
+  }
+
+  async _sha256Hex(text) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  _randomHex(bytes = 24) {
+    const arr = new Uint8Array(bytes);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /** Builds Google's sign-in URL (OpenID Connect, ID token) and remembers the nonce/state for the return trip. */
+  async _buildOwnGoogleUrl(forNativeApp) {
+    const nonce = this._randomHex();
+    const state = `${forNativeApp ? 'n' : 'w'}.${this._randomHex(12)}`;
+    try {
+      localStorage.setItem(GOOGLE_PENDING_KEY, JSON.stringify({ nonce, state, at: Date.now() }));
+    } catch (_) {}
+    const params = new URLSearchParams({
+      client_id: GOOGLE_WEB_CLIENT_ID,
+      redirect_uri: `${window.location.origin}/auth-return.html`,
+      response_type: 'id_token',
+      scope: 'openid email profile',
+      nonce: await this._sha256Hex(nonce),
+      state,
+      prompt: 'select_account',
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  /** Exchanges Google's ID token for a Supabase session. */
+  async _signInWithGoogleIdToken(idToken, state) {
+    let pending = null;
+    try {
+      pending = JSON.parse(localStorage.getItem(GOOGLE_PENDING_KEY) || 'null');
+      localStorage.removeItem(GOOGLE_PENDING_KEY);
+    } catch (_) {}
+    if (!pending || pending.state !== state || Date.now() - pending.at > 15 * 60 * 1000) {
+      throw new Error('Sign-in expired. Please try again.');
+    }
+    const res = await this._fetch(`${this.config.url}/auth/v1/token?grant_type=id_token`, {
+      method: 'POST',
+      headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'google', id_token: idToken, nonce: pending.nonce }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.access_token) {
+      throw new Error(data.msg || data.error_description || data.message || 'Sign-in failed');
+    }
+    const session = this._cloudSessionFrom(data, (data.user && data.user.email) || '', 'google');
+    this.lastSyncedAt = session.lastSyncedAt;
+    this._saveSession(session);
+    if (typeof this.onAuthStateChange === 'function') {
+      this.onAuthStateChange(this.getCurrentUser());
+    }
+    return this.getCurrentUser();
+  }
+
   async signInWithProvider(provider, emailHint = '') {
     const cleanProvider = provider === 'apple' ? 'apple' : 'google';
     const cleanEmail = this._resolveProviderEmail(cleanProvider, emailHint);
@@ -584,6 +667,19 @@ export class SupabaseSyncService {
       if (oauthEnabled) {
         const handler =
           window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.untoNative;
+        const isNativeApp = Boolean(window.__UNTO_NATIVE_IOS__ && handler);
+        if (cleanProvider === 'google' && this._canUseOwnGoogleFlow()) {
+          if (isNativeApp && !window.__UNTO_NATIVE_OAUTH__) {
+            throw new Error('Update the iPhone app (press Run in Xcode) to use Google sign-in.');
+          }
+          const googleUrl = await this._buildOwnGoogleUrl(isNativeApp);
+          if (isNativeApp) {
+            handler.postMessage({ action: 'oauthSignIn', url: googleUrl });
+          } else {
+            window.location.href = googleUrl;
+          }
+          return { redirecting: true };
+        }
         if (window.__UNTO_NATIVE_IOS__ && handler) {
           // iPhone app: Google refuses sign-in inside an app's embedded browser, so the app opens
           // Apple's secure sign-in sheet and hands the result back through untoflow://auth-callback.

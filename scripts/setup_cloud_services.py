@@ -30,8 +30,8 @@ ANON_KEY = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZi
 DOMAIN = 'untoworld.com'
 SENDER = 'flow@untoworld.com'
 SENDER_NAME = 'UNTO / FLOW'
-SITE_URL = 'https://juliafzq.github.io/UNTO_FLOW/'
-REDIRECTS = ['https://juliafzq.github.io/UNTO_FLOW/**', 'untoflow://auth-callback']
+SITE_URL = 'https://flow.untoworld.com/'
+REDIRECTS = ['https://flow.untoworld.com/**', 'https://juliafzq.github.io/UNTO_FLOW/**', 'untoflow://auth-callback']
 
 env = lambda k: (os.environ.get(k) or '').strip()
 

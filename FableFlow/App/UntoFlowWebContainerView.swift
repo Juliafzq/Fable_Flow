@@ -11,8 +11,8 @@ import AuthenticationServices
 /// with zero background battery drain and zero interference with Apple Music / Spotify.
 struct UntoFlowWebContainerView: UIViewRepresentable {
     /// Live GitHub Pages URL so UI updates ship automatically without re-building in Xcode.
-    static let liveAppURL = URL(string: "https://juliafzq.github.io/UNTO_FLOW/?native_ios=1")!
-    static let appHost = "juliafzq.github.io"
+    static let liveAppURL = URL(string: "https://flow.untoworld.com/?native_ios=1")!
+    static let appHost = "flow.untoworld.com"
 
     /// The single live coordinator (one window), used to forward widget deep links into the page.
     private static weak var activeCoordinator: Coordinator?

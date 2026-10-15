@@ -22,7 +22,7 @@ res['old iPhone build: asks to update instead of failing silently'] = 'Update th
 # Sheet cancelled -> nothing happens; error -> message
 r = c.js("window.untoHandleAuthCallback('error=cancelled')")
 res['cancelled sheet is ignored'] = r == 'cancelled' and c.js("document.getElementById('auth-modal-overlay').classList.contains('hidden')")
-c.js("window.untoHandleAuthCallback('error=access_denied&error_description=Google+said+no')")
+c.js("window.untoHandleAuthCallback('error=server_error&error_code=unexpected_failure&error_description=Google+said+no')")
 res['sign-in error is shown on the sign-in screen'] = c.js("document.getElementById('auth-error-msg').textContent") == 'Google said no'
 
 # Real tokens handed back by the sheet -> signed in, modal closes, toast

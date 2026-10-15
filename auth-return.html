@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Signing in · UNTO / FLOW</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #E7E8E2; color: #5E5D59; font: 18px 'Times New Roman', serif; }
+  </style>
+</head>
+<body>
+  <p id="msg">Signing in…</p>
+  <script>
+    // Google returns here (https://flow.untoworld.com/auth-return.html#id_token=...&state=...).
+    // The iPhone app's sign-in sheet ("n." states) waits for untoflow://auth-callback; the website
+    // goes back to the app page, which finishes signing in.
+    (function () {
+      var hash = window.location.hash || '';
+      var params = new URLSearchParams(hash.replace(/^#/, ''));
+      var state = params.get('state') || '';
+      if (state.indexOf('n.') === 0) {
+        window.location.replace('untoflow://auth-callback' + hash);
+        setTimeout(function () {
+          document.getElementById('msg').textContent = 'You can close this window and return to UNTO / FLOW.';
+        }, 1500);
+      } else {
+        window.location.replace('./' + hash);
+      }
+    })();
+  </script>
+</body>
+</html>
