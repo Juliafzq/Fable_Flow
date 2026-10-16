@@ -3,7 +3,7 @@
 This builds the real iPhone app from this repo with **Xcode** on your Mac and your **normal Apple ID**.
 No paid Apple Developer Program needed. It's for personal testing before publishing.
 
-> The app is a native shell around the live web app (`https://juliafzq.github.io/UNTO_FLOW/`), so every
+> The app is a native shell around the live web app (`https://flow.untoworld.com`), so every
 > design / feature update I push shows up in the app automatically. You only rebuild in Xcode for
 > native changes (widget, notifications) or to renew the 7-day free install.
 

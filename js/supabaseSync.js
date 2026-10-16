@@ -19,8 +19,7 @@ const USER_VAULT_PREFIX = 'fable_flow_user_vault_';
 // "flow.untoworld.com" instead of the Supabase project address. Google returns an ID token to
 // auth-return.html, and Supabase signs the user in with it. Other hosts use Supabase's redirect flow.
 export const GOOGLE_WEB_CLIENT_ID = '1054263793454-h8q5lhki7k9gjkt7g1io528437i3dhpe.apps.googleusercontent.com';
-// Switched on once the Google client lists https://flow.untoworld.com/auth-return.html as a redirect URI.
-export const OWN_GOOGLE_ORIGINS = [];
+export const OWN_GOOGLE_ORIGINS = ['https://flow.untoworld.com'];
 const GOOGLE_PENDING_KEY = 'fable_flow_google_pending_v1';
 
 // Built-in default project configuration (populated by scripts/provision_supabase.py or UI)

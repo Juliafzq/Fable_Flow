@@ -10,7 +10,7 @@
  *   at the physical silhouette horizon instead of fading out unnaturally.
  */
 
-import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261015_v83';
+import { TomatoTop3D, TOP_GEOMETRY } from './tomatoTop3D.js?v=20261016_v84';
 
 export const HEIRLOOM_PALETTE = {
   0: {
