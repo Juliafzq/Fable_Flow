@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261016_v87';
-import { CardGestureMath } from './cardGestureMath.js?v=20261016_v87';
-import { SensoryEngine } from './sensoryEngine.js?v=20261016_v87';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261016_v87';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261016_v87';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261016_v88';
+import { CardGestureMath } from './cardGestureMath.js?v=20261016_v88';
+import { SensoryEngine } from './sensoryEngine.js?v=20261016_v88';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261016_v88';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261016_v88';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261016_v87';
+} from './i18n.js?v=20261016_v88';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -53,6 +53,8 @@ export class FableFlowApp {
     this.supabaseSync = new SupabaseSyncService();
     this._authMode = 'signin'; // 'signin' | 'signup'
     this.supabaseSync.onAuthStateChange = (user) => {
+      // Just signed in (e.g. back from Google): keep cards made on this device before signing in
+      this._mergeLocalOnNextPull = true;
       this.syncFromAuthenticatedAccount(true);
       // Back from Google sign-in (web redirect or the iPhone app's sign-in sheet)
       if (!this.supabaseSync.passwordRecoveryPending) {
@@ -293,10 +295,13 @@ export class FableFlowApp {
 
   getCurrentLogicalDateString(resetHour = 5) {
     const hr = typeof resetHour === 'number' ? resetHour : 5;
-    const shifted = new Date(Date.now() - hr * 3600 * 1000);
-    const y = shifted.getFullYear();
-    const m = String(shifted.getMonth() + 1).padStart(2, '0');
-    const d = String(shifted.getDate()).padStart(2, '0');
+    // Compare against the wall-clock hour (not "now minus N real hours"), so the reset still
+    // happens at the chosen hour on daylight-saving change days (23- or 25-hour days).
+    const now = new Date();
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getHours() < hr ? 1 : 0));
+    const y = day.getFullYear();
+    const m = String(day.getMonth() + 1).padStart(2, '0');
+    const d = String(day.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
 
@@ -485,6 +490,9 @@ export class FableFlowApp {
           this.rollStateToCurrentDay(parsed);
           parsed.isSilentMode = Boolean(parsed.isSilentMode);
           parsed.hasCompletedOnboarding = Boolean(parsed.hasCompletedOnboarding);
+          // Menus always start closed (older saves stored them open)
+          parsed.openDropdownQuadrant = null;
+          parsed.isHeroDropdownOpen = false;
           if (!parsed.seenPageHints || typeof parsed.seenPageHints !== 'object') {
             parsed.seenPageHints = {};
           }
@@ -497,12 +505,43 @@ export class FableFlowApp {
     return this.getDefaultState();
   }
 
+  /**
+   * The state as it should be stored and synced: without the guided tour's demo stack cards and
+   * without open/closed menu flags (so a menu never pops open by itself after a relaunch or sync).
+   */
+  getPersistableState() {
+    const copy = { ...this.state, openDropdownQuadrant: null, isHeroDropdownOpen: false };
+    const demoKeys = this._tourInjectedKeys || [];
+    if (demoKeys.length && this.state.archiveCards) {
+      const cards = { ...this.state.archiveCards };
+      demoKeys.forEach((k) => {
+        const card = cards[k];
+        if (card && Array.isArray(card.tasks) && card.tasks.every((t) => String(t.id || '').startsWith('tour-'))) {
+          delete cards[k];
+        }
+      });
+      copy.archiveCards = cards;
+    }
+    return copy;
+  }
+
   saveState() {
+    const persistable = this.getPersistableState();
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-    } catch (_) {}
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
+      this._storageFullWarned = false;
+    } catch (err) {
+      // Usually the browser's storage is full (mostly reflection photos). Say so once instead of
+      // silently not saving.
+      if (!this._storageFullWarned && this.els) {
+        this._storageFullWarned = true;
+        this.showNotificationBanner(
+          this.t("Storage is full, so changes can't be saved on this device. Remove some photos to free space.")
+        );
+      }
+    }
     if (this.supabaseSync && this.supabaseSync.isLoggedIn()) {
-      this.supabaseSync.schedulePushCloudState(this.state);
+      this.supabaseSync.schedulePushCloudState(persistable);
     }
   }
 
@@ -1319,7 +1358,7 @@ export class FableFlowApp {
     }
     if (this.els.authSyncNowBtn) {
       this.els.authSyncNowBtn.addEventListener('click', async () => {
-        await this.supabaseSync.pushCloudState(this.state);
+        await this.supabaseSync.pushCloudState(this.getPersistableState());
         this.renderAuthModalState();
         this.showTelemetryToast(this.t('Synced to account'));
       });
@@ -1491,7 +1530,7 @@ export class FableFlowApp {
     try {
       if (this._authMode === 'signup') {
         const { user } = await this.supabaseSync.signUp(email, password);
-        await this.supabaseSync.pushCloudState(this.state);
+        await this.supabaseSync.pushCloudState(this.getPersistableState());
         if (this.els.authPasswordInput) this.els.authPasswordInput.value = '';
         this.renderAuthModalState();
         this.closeAuthModal();
@@ -1499,6 +1538,7 @@ export class FableFlowApp {
       } else {
         const { user } = await this.supabaseSync.signIn(email, password);
         if (this.els.authPasswordInput) this.els.authPasswordInput.value = '';
+        this._mergeLocalOnNextPull = true; // keep cards made on this device before signing in
         await this.syncFromAuthenticatedAccount(true);
         this.renderAuthModalState();
         this.closeAuthModal();
@@ -1516,8 +1556,9 @@ export class FableFlowApp {
       const res = await this.supabaseSync.signInWithProvider(provider, emailHint);
       if (res && res.redirecting) return;
       if (res && res.isNewUser) {
-        await this.supabaseSync.pushCloudState(this.state);
+        await this.supabaseSync.pushCloudState(this.getPersistableState());
       } else {
+        this._mergeLocalOnNextPull = true; // keep cards made on this device before signing in
         await this.syncFromAuthenticatedAccount(true);
       }
       this.renderAuthModalState();
@@ -1536,8 +1577,20 @@ export class FableFlowApp {
 
   async handleAuthSignOut() {
     if (this.supabaseSync && this.supabaseSync.isLoggedIn()) {
-      await this.supabaseSync.pushCloudState(this.state);
-      await this.supabaseSync.signOut();
+      const sync = this.supabaseSync;
+      if (sync._syncTimer) {
+        clearTimeout(sync._syncTimer);
+        sync._syncTimer = null;
+      }
+      const uploaded = await sync.pushCloudState(this.getPersistableState());
+      if (!uploaded && sync.isCloudConfigured()) {
+        // Signing out clears this device, so never do it while the latest changes exist only here
+        this.showNotificationBanner(
+          this.t("Couldn't upload your latest changes, so you're still signed in. Connect to the internet and try again.")
+        );
+        return;
+      }
+      await sync.signOut();
     }
     const fresh = this.getDefaultState();
     fresh.hasCompletedOnboarding = true;
@@ -1549,6 +1602,7 @@ export class FableFlowApp {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
     } catch (_) {}
+    this.armTimerDueAlarm(); // clears alarms that belonged to the signed-out account's timers
     this.renderAuthModalState();
     this.closeAuthModal();
     this.renderAll();
@@ -1590,13 +1644,37 @@ export class FableFlowApp {
       const cloudT = Date.parse(cloudUpdatedAt || '') || 0;
       if (!cloudState || cloudT <= seen || sync._syncTimer) return;
     }
-    if (cloudUpdatedAt) this._lastAppliedCloudAt = cloudUpdatedAt;
-    if (
+    const cloudValid =
       cloudState &&
       Array.isArray(cloudState.tasks) &&
       Array.isArray(cloudState.timers) &&
-      cloudState.timers.length === NUM_GRID_SLOTS
-    ) {
+      cloudState.timers.length === NUM_GRID_SLOTS;
+    const mergeLocal = Boolean(this._mergeLocalOnNextPull);
+    this._mergeLocalOnNextPull = false;
+    if (cloudValid && sync.isCloudConfigured()) {
+      const cloudT = Date.parse(cloudUpdatedAt || '') || 0;
+      const pendingAt = sync.getPendingUploadAt();
+      const baseT = sync.getCloudBaseAt();
+      if ((pendingAt || sync._syncTimer) && cloudT <= baseT) {
+        // This device has changes the cloud hasn't got yet (offline, closed right after an edit,
+        // or edited while this sync was loading), and nobody else changed the cloud copy since:
+        // upload ours instead of replacing them with the older cloud copy.
+        if (sync._syncTimer) {
+          clearTimeout(sync._syncTimer);
+          sync._syncTimer = null;
+        }
+        await sync.pushCloudState(this.getPersistableState());
+        this.updateProfileAccountLabel();
+        return;
+      }
+      if (pendingAt || mergeLocal) {
+        // Both this device and another one changed things: take the cloud copy, but keep anything
+        // that exists only here (stack cards for other dates, today's items if the cloud card is empty).
+        this.mergeLocalIntoCloudState(this.state, cloudState);
+      }
+    }
+    if (cloudUpdatedAt) this._lastAppliedCloudAt = cloudUpdatedAt;
+    if (cloudValid) {
       if (!cloudState.archiveCards || typeof cloudState.archiveCards !== 'object') {
         cloudState.archiveCards = this.getDefaultArchiveCards();
       }
@@ -1619,14 +1697,32 @@ export class FableFlowApp {
       this.sensory.isSilentMode = Boolean(this.state.isSilentMode);
       this._todayFlipDeg = this.state.isCardFlipped ? -180 : 0;
       this._stackFlipDeg = this.state.isStackCardFlipped ? -180 : 0;
+      this.state.openDropdownQuadrant = null;
+      this.state.isHeroDropdownOpen = false;
+      // Anything open was editing the replaced state
+      this.cancelOpenModal();
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.getPersistableState()));
       } catch (_) {}
+      if (sync._syncTimer) {
+        clearTimeout(sync._syncTimer);
+        sync._syncTimer = null;
+      }
+      if (cloudUpdatedAt) sync.setCloudBaseAt(cloudUpdatedAt);
+      const merged = Boolean(this._mergedLocalIntoCloud);
+      this._mergedLocalIntoCloud = false;
+      if (merged) {
+        // Upload the combined copy so both devices end up the same
+        await sync.pushCloudState(this.getPersistableState());
+      } else {
+        sync.clearPendingUpload();
+      }
+      this.armTimerDueAlarm(); // re-arm alarms for the new timers, clear ones that no longer exist
       if (renderImmediately) {
         this.renderAll();
       }
     } else if (!onlyIfNewer) {
-      await this.supabaseSync.pushCloudState(this.state);
+      await this.supabaseSync.pushCloudState(this.getPersistableState());
     }
     this.updateProfileAccountLabel();
   }
@@ -1643,7 +1739,7 @@ export class FableFlowApp {
         if (sync._syncTimer) {
           clearTimeout(sync._syncTimer);
           sync._syncTimer = null;
-          sync.pushCloudState(this.state);
+          sync.pushCloudState(this.getPersistableState());
         }
       } else if (Date.now() - lastPullAt > 4000) {
         lastPullAt = Date.now();
@@ -1684,6 +1780,45 @@ export class FableFlowApp {
 
   /** Clears all 6 tomatoes back to empty grey 00:00 (used by the daily "Tomato Reset" option). */
   /**
+   * Adds to a cloud copy what exists only in the local state, so taking the cloud copy never
+   * silently drops local cards: stack cards for dates the cloud doesn't have, and today's items when
+   * the cloud's card for the same day is still empty. Sets this._mergedLocalIntoCloud if it changed anything.
+   */
+  mergeLocalIntoCloudState(local, cloud) {
+    if (!local || !cloud) return;
+    let changed = false;
+    const localCards = local.archiveCards && typeof local.archiveCards === 'object' ? local.archiveCards : {};
+    if (!cloud.archiveCards || typeof cloud.archiveCards !== 'object') cloud.archiveCards = {};
+    Object.keys(localCards).forEach((k) => {
+      const card = localCards[k];
+      const isDemo =
+        card && Array.isArray(card.tasks) && card.tasks.length > 0 &&
+        card.tasks.every((t) => String(t.id || '').startsWith('tour-'));
+      if (card && !isDemo && !cloud.archiveCards[k]) {
+        cloud.archiveCards[k] = JSON.parse(JSON.stringify(card));
+        changed = true;
+      }
+    });
+    const isEmptyCard = (st) =>
+      !Array.isArray(st.tasks) ||
+      st.tasks.length === 0 ||
+      (st.tasks.length === 1 && st.tasks[0].title === 'Example Task' && !st.tasks[0].isCompleted);
+    if (
+      local.cardDateKey &&
+      local.cardDateKey === cloud.cardDateKey &&
+      isEmptyCard(cloud) &&
+      !isEmptyCard(local)
+    ) {
+      cloud.tasks = JSON.parse(JSON.stringify(local.tasks)).map((t) => ({ ...t, assignedQuadrant: null }));
+      if (!String(cloud.reflectionText || '').trim() && local.reflectionText) {
+        cloud.reflectionText = local.reflectionText;
+      }
+      changed = true;
+    }
+    if (changed) this._mergedLocalIntoCloud = true;
+  }
+
+  /**
    * Brings a saved state up to the current logical day (based on its daily reset hour).
    * If the card belongs to an earlier day, that card is archived to the stack and today's card
    * starts fresh (tomatoes reset or unlinked per "Tomato Reset"). Otherwise only the date labels
@@ -1697,8 +1832,15 @@ export class FableFlowApp {
     const currentKey = this.getCurrentLogicalDateString(hr);
     const todayMeta = this.formatDateMetadataForKey(currentKey);
     const prevKey = state.cardDateKey;
+    const prevIsDate = Boolean(prevKey && /^\d{4}-\d{2}-\d{2}$/.test(prevKey));
+    if (prevIsDate && prevKey > currentKey) {
+      // The logical day went backwards (a later reset hour, a time-zone change, or a clock change).
+      // Keep today's card under its own date: relabelling it as yesterday would hide yesterday's
+      // stack card and later overwrite it.
+      return false;
+    }
     let rolled = false;
-    if (prevKey && /^\d{4}-\d{2}-\d{2}$/.test(prevKey) && prevKey < currentKey) {
+    if (prevIsDate && prevKey < currentKey) {
       if (!state.archiveCards || typeof state.archiveCards !== 'object') {
         state.archiveCards = this.getDefaultArchiveCards();
       }
@@ -1709,22 +1851,13 @@ export class FableFlowApp {
         Boolean(state.reflectionText && String(state.reflectionText).trim()) ||
         (Array.isArray(state.reflectionPhotos) && state.reflectionPhotos.length > 0);
       if (hasCustomTasks || hasReflection) {
-        const prevMeta = this.formatDateMetadataForKey(prevKey);
-        state.archiveCards[prevKey] = {
-          dateKey: prevMeta.dateKey,
-          headerDate: state.cardHeaderDate || prevMeta.headerDate,
-          shortDate: state.cardShortDate || prevMeta.shortDate,
-          monthKey: prevMeta.monthKey,
-          dayNum: prevMeta.dayNum,
-          tasks: tasks.map((t, idx) => ({
-            id: `${prevKey}-task-${idx + 1}`,
-            orderIndex: idx + 1,
-            title: t.title,
-            isCompleted: Boolean(t.isCompleted),
-          })),
+        this.writeArchiveCard(state, prevKey, {
+          headerDate: state.cardHeaderDate,
+          shortDate: state.cardShortDate,
+          tasks,
           reflectionText: state.reflectionText || '',
           reflectionPhotos: Array.isArray(state.reflectionPhotos) ? [...state.reflectionPhotos] : [],
-        };
+        });
       }
       if (state.dailyTomatoReset) {
         this.resetAllTomatoesInState(state);
@@ -1751,6 +1884,105 @@ export class FableFlowApp {
     state.cardShortDate = todayMeta.shortDate;
     state.lastRolloverLogicalDate = currentKey;
     return rolled;
+  }
+
+  /**
+   * Cancels an open edit / delete dialog (its Save would otherwise write to the card it was opened
+   * for, which a daily reset or a cloud sync has just replaced).
+   */
+  cancelOpenModal() {
+    const cancel = this._activeModalCancel;
+    this._activeModalCancel = null;
+    if (typeof cancel === 'function') {
+      try {
+        cancel();
+      } catch (_) {}
+    }
+    if (this.els.modalOverlay) this.els.modalOverlay.classList.add('hidden');
+    if (this.els.deleteModalOverlay) this.els.deleteModalOverlay.classList.add('hidden');
+  }
+
+  /**
+   * The daily reset while the app is open (checked every second and when the app comes back to
+   * the front). Uses the same rules as every other path (rollStateToCurrentDay), never moves the
+   * date backwards, and waits while the guided tour is showing its demo cards.
+   */
+  applyLiveDayRollover() {
+    if (this._isGuidedTourActive) return false;
+    const prevKey = this.state.cardDateKey;
+    const currentKey = this.getCurrentLogicalDateString(this.state.dailyResetHour);
+    if (prevKey === currentKey && this.state.lastRolloverLogicalDate === currentKey) return false;
+    const rolled = this.rollStateToCurrentDay(this.state);
+    if (!rolled) {
+      if (this.state.cardDateKey !== prevKey) {
+        this.saveState();
+        this.renderAll();
+      }
+      return false;
+    }
+    // Close anything that was editing yesterday's card or tomatoes
+    this.cancelOpenModal();
+    this.state.selectedStackDateKey = prevKey;
+    this._todayFlipDeg = 0;
+    this.closeHeroTimeEditorDOM();
+    this.closeHeroTitleEditorDOM();
+    this.state.openDropdownQuadrant = null;
+    this.state.isHeroDropdownOpen = false;
+    this.armTimerDueAlarm();
+    this.sensory.playCardFlipSwoosh();
+    this.saveState();
+    this.renderAll();
+    this.showNotificationBanner(this.t('New day: yesterday’s card moved to your stack'));
+    return true;
+  }
+
+  /**
+   * Saves a day's card to the stack. If that date already has a stack card (e.g. from another
+   * device), the two are merged instead of one silently replacing the other.
+   * Archived tasks remember their original id (`sourceId`) so late edits (such as a cross-out
+   * made in the widget just before the reset) can still be applied to them.
+   */
+  writeArchiveCard(state, dateKey, card) {
+    if (!state.archiveCards || typeof state.archiveCards !== 'object') {
+      state.archiveCards = this.getDefaultArchiveCards();
+    }
+    const meta = this.formatDateMetadataForKey(dateKey);
+    const fresh = (card.tasks || []).map((t, idx) => ({
+      id: `${dateKey}-task-${idx + 1}`,
+      sourceId: t.sourceId || t.id || null,
+      orderIndex: idx + 1,
+      title: t.title,
+      isCompleted: Boolean(t.isCompleted),
+    }));
+    const existing = state.archiveCards[dateKey];
+    let tasks = fresh;
+    let reflectionText = card.reflectionText || '';
+    let reflectionPhotos = Array.isArray(card.reflectionPhotos) ? [...card.reflectionPhotos] : [];
+    if (existing && Array.isArray(existing.tasks)) {
+      const sameTask = (a, b) =>
+        (a.sourceId && b.sourceId && a.sourceId === b.sourceId) ||
+        String(a.title || '').trim() === String(b.title || '').trim();
+      const kept = existing.tasks.filter(
+        (old) => old.title !== 'Example Task' && !fresh.some((n) => sameTask(old, n))
+      );
+      tasks = [...kept, ...fresh].map((t, idx) => ({ ...t, id: `${dateKey}-task-${idx + 1}`, orderIndex: idx + 1 }));
+      const oldText = String(existing.reflectionText || '').trim();
+      if (oldText && !reflectionText.includes(oldText)) {
+        reflectionText = reflectionText ? `${oldText}\n\n${reflectionText}` : oldText;
+      }
+      const oldPhotos = Array.isArray(existing.reflectionPhotos) ? existing.reflectionPhotos : [];
+      reflectionPhotos = [...oldPhotos.filter((p) => !reflectionPhotos.includes(p)), ...reflectionPhotos];
+    }
+    state.archiveCards[dateKey] = {
+      dateKey: meta.dateKey,
+      headerDate: card.headerDate || meta.headerDate,
+      shortDate: card.shortDate || meta.shortDate,
+      monthKey: meta.monthKey,
+      dayNum: meta.dayNum,
+      tasks,
+      reflectionText,
+      reflectionPhotos,
+    };
   }
 
   resetAllTomatoesInState(state) {
@@ -3625,6 +3857,7 @@ export class FableFlowApp {
       this.els.deleteModalOverlay.classList.add('hidden');
       cleanup();
     };
+    this._activeModalCancel = onCancel;
     const onConfirm = () => {
       this.els.deleteModalOverlay.classList.add('hidden');
       cleanup();
@@ -3862,7 +4095,11 @@ export class FableFlowApp {
   }
 
   openHeroTimeEditor() {
+    // Switching from the title box keeps what was typed there, and closes its task menu
+    this.commitHeroTitleEditor();
     this.closeHeroTitleEditorDOM();
+    this.state.isHeroDropdownOpen = false;
+    if (this.els.heroSubtitleDropdownMount) this.els.heroSubtitleDropdownMount.innerHTML = '';
     const slot = this.state.timers[this.state.selectedQuadrant] || this.state.timers[0];
     if (!slot || !this.els.heroTimeEditor || !this.els.heroTimeInput) return;
 
@@ -3972,6 +4209,7 @@ export class FableFlowApp {
     const slot = this.state.timers[this.state.selectedQuadrant] || this.state.timers[0];
     if (!slot || !this.els.heroTitleEditor || !this.els.heroTitleInput) return;
 
+    this.commitHeroTimeEditor(); // keep a time that was being typed
     this.closeHeroTimeEditorDOM();
     if (this.els.heroSubtitleWrap) {
       this.els.heroSubtitleWrap.classList.add('is-editing-title');
@@ -4147,19 +4385,7 @@ export class FableFlowApp {
 
   startWallClockTicker() {
     if (this.tickInterval) clearInterval(this.tickInterval);
-    const checkSystemDateRefresh = () => {
-      const currentLogicalDate = this.getCurrentLogicalDateString(this.state.dailyResetHour);
-      if (
-        (this.state.lastRolloverLogicalDate &&
-          currentLogicalDate !== this.state.lastRolloverLogicalDate) ||
-        this.state.cardDateKey !== currentLogicalDate
-      ) {
-        this.state.lastRolloverLogicalDate = currentLogicalDate;
-        this.simulateFiveAmRollover(currentLogicalDate);
-        return true;
-      }
-      return false;
-    };
+    const checkSystemDateRefresh = () => this.applyLiveDayRollover();
 
     if (!this._boundVisibilityRefresh) {
       this._boundVisibilityRefresh = () => {
@@ -4239,7 +4465,11 @@ export class FableFlowApp {
         })
       );
     });
-    this.saveState();
+    // A running countdown is fully described by its saved start point (remaining time +
+    // lastTickTimestamp), so the per-second tick doesn't need saving. Saving it every second used
+    // to re-upload the whole state to the cloud each second, overwriting edits made on another
+    // device while a timer ran. Only a finished timer is a real change.
+    if (completed.length) this.saveState();
     if (this.state.activePillar === 'timer') {
       if (this.state.timerSubMode === 'hero') {
         if (completed.length) {
@@ -4418,7 +4648,9 @@ export class FableFlowApp {
       if (isRunningCountdown) {
         const dueAt = slot.lastTickTimestamp + slot.remainingSeconds * 1000;
         soonest = Math.min(soonest, dueAt);
-        if (nativeBridge && !(this.sensory && this.sensory.isSilentMode)) {
+        if (nativeBridge) {
+          // Sound Off still shows the 00:00 alert (just without the bell), so a timer finishing
+          // while the app is closed is never missed.
           try {
             const taskTitle = this.displayTaskTitle(slot.customTitle || this.t('Timer'));
             nativeBridge.postMessage({
@@ -4427,11 +4659,8 @@ export class FableFlowApp {
               title: 'UNTO / FLOW',
               body: this.t('Timer completed: {title}', { title: taskTitle }),
               endsAtMs: dueAt,
+              silent: Boolean(this.sensory && this.sensory.isSilentMode),
             });
-          } catch (_) {}
-        } else if (nativeBridge) {
-          try {
-            nativeBridge.postMessage({ action: 'cancelTimer', slotIndex: slot.quadrant });
           } catch (_) {}
         }
       } else if (nativeBridge) {
@@ -4597,6 +4826,7 @@ export class FableFlowApp {
     slot.configuredMinutes = 0;
     slot.angleDegrees = 0;
     slot.lastTickTimestamp = null;
+    this.armTimerDueAlarm(); // cancel this tomato's pending alarm / notification
 
     this.closeHeroTitleEditorDOM();
     this.state.openDropdownQuadrant = null;
@@ -4654,6 +4884,16 @@ export class FableFlowApp {
     }
     if (!isTimer || this.state.timerSubMode !== 'hero') {
       this.state.isHeroDropdownOpen = false;
+      // Leaving the tomato page (Grid button, Card pill...) keeps what was typed, like tapping outside
+      if (!this._committingHeroEditors) {
+        this._committingHeroEditors = true;
+        try {
+          this.commitHeroTitleEditor();
+          this.commitHeroTimeEditor();
+        } finally {
+          this._committingHeroEditors = false;
+        }
+      }
       this.closeHeroTimeEditorDOM();
       this.closeHeroTitleEditorDOM();
     }
@@ -5114,7 +5354,10 @@ export class FableFlowApp {
           const curM = this.formatDateMetadataForKey(
             this.state.selectedStackDateKey || this.getOffsetDateKey(todayKey, -1)
           ).monthKey;
-          const prevMonth = curM === todayMeta.monthKey ? '2026-09' : todayMeta.monthKey;
+          const [todayY, todayM] = todayMeta.monthKey.split('-').map(Number);
+          const prevMonthDate = new Date(todayY, todayM - 2, 1);
+          const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+          const prevMonth = curM === todayMeta.monthKey ? prevMonthKey : todayMeta.monthKey;
           const monthDates = this.getNavigableStackDateKeys().filter((k) =>
             k.startsWith(`${prevMonth}-`)
           );
@@ -6618,6 +6861,7 @@ export class FableFlowApp {
             if (rem) s.assignedTaskOrder = rem.orderIndex;
           }
         }
+        this.armTimerDueAlarm(); // a deleted item's running tomato must not ring later
         this.saveState();
         this.renderAll();
       }
@@ -6904,6 +7148,7 @@ export class FableFlowApp {
       this.els.deleteModalOverlay.classList.add('hidden');
       cleanup();
     };
+    this._activeModalCancel = onCancel;
     const onConfirm = () => {
       this.els.deleteModalOverlay.classList.add('hidden');
       cleanup();
@@ -6928,6 +7173,7 @@ export class FableFlowApp {
           }
         }
       }
+      this.armTimerDueAlarm(); // a deleted item's running tomato must not ring later
       this.saveState();
       this.renderAll();
       this.showNotificationBanner(this.t('Task deleted'));
@@ -7014,6 +7260,7 @@ export class FableFlowApp {
       this.els.modalOverlay.classList.add('hidden');
       cleanup();
     };
+    this._activeModalCancel = close;
     const confirm = () => {
       const val = this.els.modalInput.value;
       close();
@@ -7089,8 +7336,10 @@ export class FableFlowApp {
     if (keys.length < 2) {
       const twoDaysMeta = this.formatDateMetadataForKey(twoDaysAgoKey);
       const yesterdayMeta = this.formatDateMetadataForKey(yesterdayKey);
+      const realCards = this.state.archiveCards || {};
+      // Demo cards only fill empty dates (never cover a real card) and are never saved or synced
+      this._tourInjectedKeys = [twoDaysAgoKey, yesterdayKey].filter((k) => !realCards[k]);
       this.state.archiveCards = {
-        ...this.state.archiveCards,
         [twoDaysAgoKey]: {
           dateKey: twoDaysMeta.dateKey,
           headerDate: twoDaysMeta.headerDate,
@@ -7125,6 +7374,7 @@ export class FableFlowApp {
           reflectionText: 'Focused morning session.',
           reflectionPhotos: [],
         },
+        ...realCards,
       };
       if (!this.state.selectedStackDateKey || !this.state.archiveCards[this.state.selectedStackDateKey]) {
         this.state.selectedStackDateKey = yesterdayKey;
@@ -7134,11 +7384,16 @@ export class FableFlowApp {
 
   restoreTourDemoArchiveCards() {
     if (this._tourSavedArchiveState) {
-      this.state.archiveCards = JSON.parse(
-        JSON.stringify(this._tourSavedArchiveState.archiveCards || {})
-      );
+      // Remove only the demo cards, so anything archived during the tour is kept
+      (this._tourInjectedKeys || []).forEach((k) => {
+        const card = this.state.archiveCards && this.state.archiveCards[k];
+        const isDemo =
+          card && Array.isArray(card.tasks) && card.tasks.every((t) => String(t.id || '').startsWith('tour-'));
+        if (isDemo) delete this.state.archiveCards[k];
+      });
       this.state.selectedStackDateKey = this._tourSavedArchiveState.selectedStackDateKey;
       this._tourSavedArchiveState = null;
+      this._tourInjectedKeys = [];
     }
   }
 
@@ -8049,6 +8304,9 @@ export class FableFlowApp {
   finishGuidedTour() {
     this.stopTourDemoLoop();
     this.restoreTourDemoArchiveCards();
+    this._isGuidedTourActive = false;
+    // A new day may have started during the tour (the reset waits until the tour is over)
+    this.applyLiveDayRollover();
     const vp = document.getElementById('app-viewport');
     if (vp) vp.classList.remove('tour-active');
     this.setTourDotState(this.els.tourPageDot, null, null, 0);

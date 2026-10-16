@@ -255,6 +255,10 @@ const ZH = {
   'Supabase Cloud connected': '已连接云端',
   'Saved local vault mode': '已改为仅存本地',
   'New day: yesterday’s card moved to your stack': '新的一天开始了，昨天的卡片已放进卡片堆',
+  "Storage is full, so changes can't be saved on this device. Remove some photos to free space.":
+    '存储空间已满，此设备无法保存更改。请删除一些照片以释放空间。',
+  "Couldn't upload your latest changes, so you're still signed in. Connect to the internet and try again.":
+    '最新更改尚未上传，因此仍保持登录。请连接网络后重试。',
   'Restored clean default state with Example Task.': '已恢复默认状态',
   'Language: English': 'Language: English',
   'Language: 简体中文': '语言：简体中文',

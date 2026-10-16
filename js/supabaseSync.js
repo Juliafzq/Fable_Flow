@@ -14,6 +14,10 @@ const CONFIG_STORAGE_KEY = 'fable_flow_supabase_config_v1';
 const SESSION_STORAGE_KEY = 'fable_flow_auth_session_v1';
 const LOCAL_ACCOUNTS_KEY = 'fable_flow_accounts_v1';
 const USER_VAULT_PREFIX = 'fable_flow_user_vault_';
+// Time (ms) of the oldest local change that hasn't reached the cloud yet (survives app restarts)
+const PENDING_UPLOAD_KEY = 'fable_flow_pending_upload_v1';
+// Cloud copy's updated_at that this device last pulled or pushed (the common starting point)
+const CLOUD_BASE_KEY = 'fable_flow_cloud_base_v1';
 
 // "Continue with Google" talks to Google directly from the app's own domain, so Google's screens say
 // "flow.untoworld.com" instead of the Supabase project address. Google returns an ID token to
@@ -753,6 +757,50 @@ export class SupabaseSyncService {
     }
     this._saveSession(null);
     this.lastSyncedAt = null;
+    this.clearPendingUpload();
+    try {
+      localStorage.removeItem(CLOUD_BASE_KEY);
+    } catch (_) {}
+  }
+
+  /** True while some local change hasn't been uploaded yet (e.g. offline, or app closed right after an edit). */
+  getPendingUploadAt() {
+    try {
+      return Number(localStorage.getItem(PENDING_UPLOAD_KEY)) || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  markPendingUpload() {
+    this._pendingSeq = (this._pendingSeq || 0) + 1;
+    try {
+      if (!localStorage.getItem(PENDING_UPLOAD_KEY)) {
+        localStorage.setItem(PENDING_UPLOAD_KEY, String(Date.now()));
+      }
+    } catch (_) {}
+  }
+
+  clearPendingUpload() {
+    try {
+      localStorage.removeItem(PENDING_UPLOAD_KEY);
+    } catch (_) {}
+  }
+
+  /** The cloud copy's time when this device last matched it (pulled or pushed). */
+  getCloudBaseAt() {
+    try {
+      return Date.parse(localStorage.getItem(CLOUD_BASE_KEY) || '') || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  setCloudBaseAt(iso) {
+    if (!iso) return;
+    try {
+      localStorage.setItem(CLOUD_BASE_KEY, iso);
+    } catch (_) {}
   }
 
   loadUserVaultState(userId) {
@@ -767,6 +815,14 @@ export class SupabaseSyncService {
 
   saveUserVaultState(userId, statePayload) {
     if (!userId || !statePayload) return;
+    if (this.isCloudConfigured()) {
+      // With cloud sync the cloud is the account's copy; a second full copy here only halves the
+      // space left for reflection photos.
+      try {
+        localStorage.removeItem(`${USER_VAULT_PREFIX}${userId}`);
+      } catch (_) {}
+      return;
+    }
     try {
       localStorage.setItem(
         `${USER_VAULT_PREFIX}${userId}`,
@@ -819,6 +875,7 @@ export class SupabaseSyncService {
     if (!user || !statePayload) return false;
 
     const snapshot = JSON.parse(JSON.stringify(statePayload));
+    const seqAtStart = this._pendingSeq || 0;
     this.saveUserVaultState(user.id, snapshot);
     const nowIso = new Date().toISOString();
     this.lastSyncedAt = nowIso;
@@ -844,7 +901,12 @@ export class SupabaseSyncService {
           }),
         });
         this.isSyncing = false;
-        if (res.ok) this.lastPushedAt = nowIso;
+        if (res.ok) {
+          this.lastPushedAt = nowIso;
+          this.setCloudBaseAt(nowIso);
+          // Nothing newer was saved while uploading: everything is in the cloud now
+          if ((this._pendingSeq || 0) === seqAtStart && !this._syncTimer) this.clearPendingUpload();
+        }
         return res.ok;
       } catch (_) {
         this.isSyncing = false;
@@ -860,6 +922,7 @@ export class SupabaseSyncService {
     if (user) {
       this.saveUserVaultState(user.id, statePayload);
     }
+    this.markPendingUpload();
     if (this._syncTimer) {
       clearTimeout(this._syncTimer);
     }

@@ -1208,7 +1208,9 @@ html.mobile-landscape-locked .app-viewport {
   display: flex;
   flex-direction: column;
   background-color: #FFFFFF;
-  max-height: 260px;
+  /* Shorter on short screens so menus opening from the middle row stay on screen */
+  max-height: min(260px, calc(100dvh - 360px));
+  min-height: 88px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -1971,7 +1973,7 @@ html.mobile-landscape-locked .app-viewport {
 
 .notification-banner {
   position: absolute;
-  top: clamp(64px, 9.5dvh, 84px);
+  top: calc(env(safe-area-inset-top, 0px) + clamp(64px, 9.5dvh, 84px));
   left: 24px;
   right: 24px;
   background-color: #111111;
@@ -1997,7 +1999,7 @@ html.mobile-landscape-locked .app-viewport {
 /* Positioned cleanly above the bottom icon bars so toast text never overlaps bottom icons */
 .telemetry-toast {
   position: absolute;
-  bottom: clamp(68px, 10.5dvh, 88px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(68px, 10.5dvh, 88px));
   left: 50%;
   transform: translateX(-50%) translateY(8px);
   width: max-content;
@@ -2130,7 +2132,8 @@ html.mobile-landscape-locked .app-viewport {
 
 .profile-popover-card {
   position: absolute;
-  top: 56px;
+  /* + the notch / Dynamic Island inset, so the menu opens below its button in the iPhone app */
+  top: calc(env(safe-area-inset-top, 0px) + 56px);
   right: 22px;
   width: 186px;
   background: #FAF9F5;
@@ -3097,6 +3100,13 @@ html.lang-zh .about-block-lead {
 
 /* Very narrow phones (iPhone SE 1st gen, 320px): keep the past-card header + Edit pill inside the card */
 @media (max-width: 340px) {
+  /* 320px-wide phones: keep the profile button off the Card | Timer pill */
+  .segmented-pill {
+    width: 196px;
+  }
+  .profile-icon-btn {
+    right: 12px;
+  }
   .card-date-title,
   .card-back-date-title {
     font-size: 16px;

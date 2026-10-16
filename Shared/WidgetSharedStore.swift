@@ -50,8 +50,9 @@ enum WidgetSharedStore {
     /// The app sends today's tasks. Cross-outs made in the widget that the app hasn't applied yet win.
     static func updateFromApp(tasks: [WidgetCardTask]) {
         var card = loadCard() ?? WidgetCardSnapshot()
-        let validIDs = Set(tasks.map { $0.id })
-        card.pendingEdits = card.pendingEdits.filter { validIDs.contains($0.key) }
+        // Keep edits for tasks that are no longer on today's card: after the daily reset they
+        // belong to the card in the stack, and the app still applies them there
+        // (they're cleared once the app has applied them).
         card.tasks = tasks.map { task in
             var task = task
             if let pending = card.pendingEdits[task.id] {

@@ -245,12 +245,24 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
               var a = window.fableFlowApp;
               if (!a || !a.state || !Array.isArray(a.state.tasks)) return false;
               var changed = false;
+              var has = function (key) { return key && Object.prototype.hasOwnProperty.call(edits, key); };
               a.state.tasks.forEach(function (t) {
                 var key = String(t.id);
-                if (Object.prototype.hasOwnProperty.call(edits, key) && !!t.isCompleted !== edits[key]) {
+                if (has(key) && !!t.isCompleted !== edits[key]) {
                   t.isCompleted = edits[key];
                   changed = true;
                 }
+              });
+              // Cross-outs made just before the daily reset belong to the card now in the stack
+              Object.keys(a.state.archiveCards || {}).forEach(function (k) {
+                var card = a.state.archiveCards[k];
+                (card && card.tasks || []).forEach(function (t) {
+                  var key = t.sourceId ? String(t.sourceId) : '';
+                  if (has(key) && !!t.isCompleted !== edits[key]) {
+                    t.isCompleted = edits[key];
+                    changed = true;
+                  }
+                });
               });
               if (changed) { a.saveState(); a.renderAll(); }
               return true;
@@ -370,7 +382,8 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
                     slotIndex: slotIndex,
                     title: title,
                     body: messageText,
-                    delaySeconds: delaySec
+                    delaySeconds: delaySec,
+                    silent: (body["silent"] as? Bool) ?? false
                 )
 
             case "cancelTimer":
@@ -450,14 +463,16 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
             slotIndex: Int,
             title: String,
             body: String,
-            delaySeconds: TimeInterval
+            delaySeconds: TimeInterval,
+            silent: Bool = false
         ) {
             requestNotificationPermission()
 
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
-            content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: "bell_alarm.wav"))
+            // Sound Off in the app: still show the alert, just without the bell
+            content.sound = silent ? nil : UNNotificationSound(named: UNNotificationSoundName(rawValue: "bell_alarm.wav"))
             content.badge = nil
             if #available(iOS 15.0, *) {
                 content.interruptionLevel = .timeSensitive
