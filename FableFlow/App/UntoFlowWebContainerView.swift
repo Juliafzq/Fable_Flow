@@ -3,6 +3,7 @@ import WebKit
 import UserNotifications
 import UIKit
 import WidgetKit
+import AVFoundation
 import AuthenticationServices
 
 /// Full-screen native iOS wrapper for UNTO / FLOW.
@@ -227,6 +228,8 @@ struct UntoFlowWebContainerView: UIViewRepresentable {
         }
 
         @objc private func appDidBecomeActive() {
+            // Phone calls, Siri or other apps can switch our audio off; turn it back on.
+            try? AVAudioSession.sharedInstance().setActive(true)
             applyWidgetEdits()
         }
 
