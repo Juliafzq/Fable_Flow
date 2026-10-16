@@ -18,8 +18,8 @@ private let openTimerURL = URL(string: "untoflow://timer")!
 private let openCardURL = URL(string: "untoflow://card")!
 /// Rows that fit in the wide widget (the last one becomes "+N more" when there are extra tasks).
 private let maxCardRows = 5
-/// The tomato picture is 350 × 300.
-private let tomatoAspect: CGFloat = 300.0 / 350.0
+/// Height ÷ width of the tomato picture (441 × 375, cropped tight with a transparent background).
+private let tomatoAspect: CGFloat = 375.0 / 441.0
 
 // MARK: - Timeline
 
@@ -106,6 +106,9 @@ private struct CountdownText: View {
     }
 }
 
+private let buttonFace = Color(red: 246.0 / 255.0, green: 245.0 / 255.0, blue: 240.0 / 255.0)
+
+/// Round button. Light buttons have a soft shadow so they read on top of the tomato.
 private struct RoundControl: View {
     let symbol: String
     var size: CGFloat = 28
@@ -116,7 +119,8 @@ private struct RoundControl: View {
             .font(.system(size: size * 0.42, weight: .bold))
             .foregroundStyle(filled ? Color.white : ink)
             .frame(width: size, height: size)
-            .background(Circle().fill(filled ? ink : ink.opacity(0.08)))
+            .background(Circle().fill(filled ? ink : buttonFace))
+            .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
     }
 }
 
@@ -137,32 +141,33 @@ private struct TomatoTimerView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let controlsHeight: CGFloat = 38
-            let tomatoHeight = min(geo.size.height - controlsHeight + 6, (geo.size.width - 6) * tomatoAspect)
-            let tomatoWidth = tomatoHeight / tomatoAspect
+            // The tomato fills about 80% of the widget's height (and nearly its full width).
+            let tomatoWidth = min(geo.size.width * 0.94, geo.size.height * 0.80 / tomatoAspect)
+            let tomatoHeight = tomatoWidth * tomatoAspect
+            let tomatoTop = max(4, (geo.size.height - tomatoHeight - 16) * 0.35)
+            let centerX = geo.size.width / 2
 
-            ZStack(alignment: .bottom) {
-                // Big tomato with the time on its body (nudged down, away from the leaves).
-                ZStack {
-                    Image("Tomato")
-                        .resizable()
-                        .scaledToFit()
-                    CountdownText(entry: entry)
-                        .font(.system(size: tomatoWidth * 0.17, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .frame(width: tomatoWidth * 0.6)
-                        .offset(y: tomatoHeight * 0.09)
-                }
-                .frame(width: tomatoWidth, height: tomatoHeight)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            ZStack {
+                Image("Tomato")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: tomatoWidth, height: tomatoHeight)
+                    .position(x: centerX, y: tomatoTop + tomatoHeight / 2)
 
-                // − / start-pause / +
-                HStack(spacing: 18) {
+                // Time on the smooth upper body, between the stem and the dial ring.
+                CountdownText(entry: entry)
+                    .font(.system(size: tomatoWidth * 0.2, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(width: tomatoWidth * 0.72)
+                    .position(x: centerX, y: tomatoTop + tomatoHeight * 0.38)
+
+                // − / start-pause / +, half on the tomato's bottom edge.
+                HStack(spacing: 16) {
                     Button(intent: AdjustTimerIntent(deltaMinutes: -WidgetTimerState.minuteStep)) {
                         RoundControl(symbol: "minus")
                     }
@@ -176,7 +181,7 @@ private struct TomatoTimerView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.bottom, 6)
+                .position(x: centerX, y: tomatoTop + tomatoHeight)
             }
             .overlay(alignment: .topTrailing) {
                 // Reset only appears while paused.
@@ -351,7 +356,6 @@ struct UntoFlowTimerWidgetView: View {
         #endif
         default:
             TomatoTimerView(entry: entry)
-                .padding(4)
         }
     }
 }
