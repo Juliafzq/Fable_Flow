@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261016_v86';
-import { CardGestureMath } from './cardGestureMath.js?v=20261016_v86';
-import { SensoryEngine } from './sensoryEngine.js?v=20261016_v86';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261016_v86';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261016_v86';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261016_v87';
+import { CardGestureMath } from './cardGestureMath.js?v=20261016_v87';
+import { SensoryEngine } from './sensoryEngine.js?v=20261016_v87';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261016_v87';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261016_v87';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261016_v86';
+} from './i18n.js?v=20261016_v87';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;
@@ -481,75 +481,8 @@ export class FableFlowApp {
           }
           parsed.dailyTomatoReset = Boolean(parsed.dailyTomatoReset);
           const currentLogicalKey = this.getCurrentLogicalDateString(parsed.dailyResetHour);
-          const todayMeta = this.formatDateMetadataForKey(currentLogicalKey);
-          if (!parsed.cardDateKey || parsed.cardDateKey !== currentLogicalKey) {
-            const prevKey = parsed.cardDateKey;
-            // Reopened on a new day: reset the tomatoes too when the user chose "Tomato Reset: Yes"
-            if (
-              parsed.dailyTomatoReset &&
-              prevKey &&
-              /^\d{4}-\d{2}-\d{2}$/.test(prevKey) &&
-              prevKey < currentLogicalKey
-            ) {
-              this.resetAllTomatoesInState(parsed);
-            }
-            const hasCustomTasks =
-              Array.isArray(parsed.tasks) &&
-              (parsed.tasks.length !== 1 ||
-                parsed.tasks[0].title !== 'Example Task' ||
-                Boolean(parsed.tasks[0].isCompleted));
-            const hasReflection =
-              Boolean(parsed.reflectionText && parsed.reflectionText.trim()) ||
-              (Array.isArray(parsed.reflectionPhotos) && parsed.reflectionPhotos.length > 0);
-            if (
-              prevKey &&
-              /^\d{4}-\d{2}-\d{2}$/.test(prevKey) &&
-              prevKey < currentLogicalKey &&
-              parsed.lastRolloverLogicalDate &&
-              parsed.lastRolloverLogicalDate !== currentLogicalKey &&
-              (hasCustomTasks || hasReflection) &&
-              !parsed.archiveCards[prevKey]
-            ) {
-              const prevMeta = this.formatDateMetadataForKey(prevKey);
-              parsed.archiveCards[prevKey] = {
-                dateKey: prevMeta.dateKey,
-                headerDate: parsed.cardHeaderDate || prevMeta.headerDate,
-                shortDate: parsed.cardShortDate || prevMeta.shortDate,
-                monthKey: prevMeta.monthKey,
-                dayNum: prevMeta.dayNum,
-                tasks: parsed.tasks.map((t, idx) => ({
-                  id: `${prevKey}-task-${idx + 1}`,
-                  orderIndex: idx + 1,
-                  title: t.title,
-                  isCompleted: Boolean(t.isCompleted),
-                })),
-                reflectionText: parsed.reflectionText || '',
-                reflectionPhotos: Array.isArray(parsed.reflectionPhotos)
-                  ? [...parsed.reflectionPhotos]
-                  : [],
-              };
-              // Tomatoes that keep going into the new day keep their name, but are no longer
-              // linked to yesterday's (now archived) card items
-              this.unlinkTomatoesFromTasks(parsed);
-              parsed.tasks = [
-                {
-                  id: 'task-' + Date.now(),
-                  orderIndex: 1,
-                  title: 'Example Task',
-                  isCompleted: false,
-                  assignedQuadrant: null,
-                },
-              ];
-              parsed.reflectionText = '';
-              parsed.reflectionPhotos = [];
-            }
-            parsed.cardDateKey = todayMeta.dateKey;
-            parsed.cardHeaderDate = todayMeta.headerDate;
-            parsed.cardShortDate = todayMeta.shortDate;
-          } else {
-            parsed.cardHeaderDate = todayMeta.headerDate;
-            parsed.cardShortDate = todayMeta.shortDate;
-          }
+          // Reopened on a new day: yesterday's card goes to the stack and today starts fresh
+          this.rollStateToCurrentDay(parsed);
           parsed.isSilentMode = Boolean(parsed.isSilentMode);
           parsed.hasCompletedOnboarding = Boolean(parsed.hasCompletedOnboarding);
           if (!parsed.seenPageHints || typeof parsed.seenPageHints !== 'object') {
@@ -915,12 +848,8 @@ export class FableFlowApp {
       this.els.profileResetTimeSelect.addEventListener('change', (e) => {
         const hourVal = Math.max(0, Math.min(23, parseInt(e.target.value, 10) || 0));
         this.state.dailyResetHour = hourVal;
-        const newLogicalKey = this.getCurrentLogicalDateString(hourVal);
-        const newMeta = this.formatDateMetadataForKey(newLogicalKey);
-        this.state.lastRolloverLogicalDate = newLogicalKey;
-        this.state.cardDateKey = newMeta.dateKey;
-        this.state.cardHeaderDate = newMeta.headerDate;
-        this.state.cardShortDate = newMeta.shortDate;
+        // If the new reset time means a new day has already started, reset the card now
+        this.rollStateToCurrentDay(this.state);
         this.saveState();
         this.renderAll();
         const padded = String(hourVal).padStart(2, '0') + ':00';
@@ -1668,13 +1597,12 @@ export class FableFlowApp {
       Array.isArray(cloudState.timers) &&
       cloudState.timers.length === NUM_GRID_SLOTS
     ) {
-      const hr = typeof cloudState.dailyResetHour === 'number' ? cloudState.dailyResetHour : 5;
-      const currentLogicalKey = this.getCurrentLogicalDateString(hr);
-      const todayMeta = this.formatDateMetadataForKey(currentLogicalKey);
-      cloudState.cardDateKey = todayMeta.dateKey;
-      cloudState.cardHeaderDate = todayMeta.headerDate;
-      cloudState.cardShortDate = todayMeta.shortDate;
-      cloudState.lastRolloverLogicalDate = currentLogicalKey;
+      if (!cloudState.archiveCards || typeof cloudState.archiveCards !== 'object') {
+        cloudState.archiveCards = this.getDefaultArchiveCards();
+      }
+      // A copy saved on an earlier day gets the daily reset too (instead of yesterday's tasks
+      // showing up under today's date)
+      this.rollStateToCurrentDay(cloudState);
       cloudState.hasCompletedOnboarding = true;
       cloudState.activePillar = prevPillar;
       this.reconcileElapsedTimers(cloudState);
@@ -1755,6 +1683,76 @@ export class FableFlowApp {
   }
 
   /** Clears all 6 tomatoes back to empty grey 00:00 (used by the daily "Tomato Reset" option). */
+  /**
+   * Brings a saved state up to the current logical day (based on its daily reset hour).
+   * If the card belongs to an earlier day, that card is archived to the stack and today's card
+   * starts fresh (tomatoes reset or unlinked per "Tomato Reset"). Otherwise only the date labels
+   * are refreshed. Returns true when a reset happened.
+   * Every place that moves the card's date must go through here, so the date can never change
+   * without the card resetting.
+   */
+  rollStateToCurrentDay(state) {
+    if (!state) return false;
+    const hr = typeof state.dailyResetHour === 'number' ? state.dailyResetHour : 5;
+    const currentKey = this.getCurrentLogicalDateString(hr);
+    const todayMeta = this.formatDateMetadataForKey(currentKey);
+    const prevKey = state.cardDateKey;
+    let rolled = false;
+    if (prevKey && /^\d{4}-\d{2}-\d{2}$/.test(prevKey) && prevKey < currentKey) {
+      if (!state.archiveCards || typeof state.archiveCards !== 'object') {
+        state.archiveCards = this.getDefaultArchiveCards();
+      }
+      const tasks = Array.isArray(state.tasks) ? state.tasks : [];
+      const hasCustomTasks =
+        tasks.length !== 1 || tasks[0].title !== 'Example Task' || Boolean(tasks[0].isCompleted);
+      const hasReflection =
+        Boolean(state.reflectionText && String(state.reflectionText).trim()) ||
+        (Array.isArray(state.reflectionPhotos) && state.reflectionPhotos.length > 0);
+      if (hasCustomTasks || hasReflection) {
+        const prevMeta = this.formatDateMetadataForKey(prevKey);
+        state.archiveCards[prevKey] = {
+          dateKey: prevMeta.dateKey,
+          headerDate: state.cardHeaderDate || prevMeta.headerDate,
+          shortDate: state.cardShortDate || prevMeta.shortDate,
+          monthKey: prevMeta.monthKey,
+          dayNum: prevMeta.dayNum,
+          tasks: tasks.map((t, idx) => ({
+            id: `${prevKey}-task-${idx + 1}`,
+            orderIndex: idx + 1,
+            title: t.title,
+            isCompleted: Boolean(t.isCompleted),
+          })),
+          reflectionText: state.reflectionText || '',
+          reflectionPhotos: Array.isArray(state.reflectionPhotos) ? [...state.reflectionPhotos] : [],
+        };
+      }
+      if (state.dailyTomatoReset) {
+        this.resetAllTomatoesInState(state);
+      } else {
+        // Tomatoes keep going into the new day with their names, unlinked from yesterday's items
+        this.unlinkTomatoesFromTasks(state);
+      }
+      state.tasks = [
+        {
+          id: 'task-' + Date.now(),
+          orderIndex: 1,
+          title: 'Example Task',
+          isCompleted: false,
+          assignedQuadrant: null,
+        },
+      ];
+      state.reflectionText = '';
+      state.reflectionPhotos = [];
+      state.isCardFlipped = false;
+      rolled = true;
+    }
+    state.cardDateKey = todayMeta.dateKey;
+    state.cardHeaderDate = todayMeta.headerDate;
+    state.cardShortDate = todayMeta.shortDate;
+    state.lastRolloverLogicalDate = currentKey;
+    return rolled;
+  }
+
   resetAllTomatoesInState(state) {
     if (!state || !Array.isArray(state.timers)) return;
     state.timers.forEach((s) => {

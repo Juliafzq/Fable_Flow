@@ -1022,6 +1022,12 @@ html.mobile-landscape-locked .app-viewport {
   z-index: 30;
 }
 
+/* Bottom-row tomatoes open their task menu upwards so it isn't cut off by the bottom of the screen. */
+.grid-quadrant:nth-child(n+5) .task-assign-dropdown {
+  top: auto;
+  bottom: 30px;
+}
+
 .grid-tomato-wrap {
   position: relative;
   width: min(154px, 41vw);
