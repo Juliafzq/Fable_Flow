@@ -20,18 +20,18 @@
  * 5. Monthly Calendar Zoom-Out View (07-calendar-view.png) & 5:00 AM Daily Rollover Engine.
  */
 
-import { OdometerDialPhysics } from './odometerPhysics.js?v=20261016_v85';
-import { CardGestureMath } from './cardGestureMath.js?v=20261016_v85';
-import { SensoryEngine } from './sensoryEngine.js?v=20261016_v85';
-import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261016_v85';
-import { SupabaseSyncService } from './supabaseSync.js?v=20261016_v85';
+import { OdometerDialPhysics } from './odometerPhysics.js?v=20261016_v86';
+import { CardGestureMath } from './cardGestureMath.js?v=20261016_v86';
+import { SensoryEngine } from './sensoryEngine.js?v=20261016_v86';
+import { HeroTomato3DView, GridTomatoRenderer } from './tomato3D.js?v=20261016_v86';
+import { SupabaseSyncService } from './supabaseSync.js?v=20261016_v86';
 import {
   t as i18nT,
   setLanguage,
   getLanguage,
   registerStaticI18n,
   applyStaticI18n,
-} from './i18n.js?v=20261016_v85';
+} from './i18n.js?v=20261016_v86';
 
 const STORAGE_KEY = 'fable_flow_phase2_mvp_v10';
 const NUM_GRID_SLOTS = 6;

@@ -1015,6 +1015,13 @@ html.mobile-landscape-locked .app-viewport {
   border-bottom: none;
 }
 
+/* The tomato whose task menu is open sits above its neighbours, so the menu is never covered by the
+   tomato below it (a tapped tomato keeps its hover zoom on iPhone, which would otherwise trap the
+   menu underneath the next row). */
+.grid-quadrant:has(.task-assign-dropdown) {
+  z-index: 30;
+}
+
 .grid-tomato-wrap {
   position: relative;
   width: min(154px, 41vw);
